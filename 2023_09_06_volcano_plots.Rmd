@@ -1,0 +1,57 @@
+---
+title: "Volcano Plots"
+#output: html_notebook
+---
+
+This worksheet will produced Volcanoplots based on the differential gene results on the scRNAseq dataset in the 2023_08_29_tonsil_scRNA project.
+
+#Load libraries
+
+```{r}
+library(EnhancedVolcano)
+```
+
+# Read in data
+
+```{r}
+m1.mac <- read.csv(file = "Analysis_2023_08_29/results/m1_mac_Sig_Genes.csv") |> 
+  tibble::column_to_rownames(var = "symbols")
+
+
+```
+
+```{r}
+temp <- rownames(m1.mac)
+summary(m1.mac$symbols)
+```
+
+
+# Volcano Plots
+
+## M1 Macrophages
+
+```{r}
+EnhancedVolcano(m1.mac,
+                lab = symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "M1 Macrophage population")
+```
+
+```{r}
+ggsave(filename = paste0("volcano_example.png"),
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+
+
+
+
+
+
+
+
+
