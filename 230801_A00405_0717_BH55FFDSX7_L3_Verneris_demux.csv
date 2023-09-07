@@ -1,0 +1,7 @@
+H55FFDSX7 / Verneris_07202023 / 10x3prime_V_3_1,,,,,,,,,,
+/230801_A00405_0717_BH55FFDSX7/Data/Intensities/BaseCalls/Unaligned_L3_duali_10x10/,,,,,,,,,,
+Lane Summary,,,,,,,,,,
+,,,,,,,,,,
+Lane,Sample,Barcode sequence,PF Clusters,% of the,% Perfect,% One mismatch,Yield (Mbases),% PF,% >= Q30,Mean Quality
+,,,,lane,barcode,barcode,,Clusters,bases,Score
+3,DS_TN_6865,GAATTGGTTA+CTACTAGAGT,"575,977,390",21.3,97.82,2.18,"173,945",100,73,31.28
