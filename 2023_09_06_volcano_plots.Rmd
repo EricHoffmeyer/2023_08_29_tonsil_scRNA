@@ -14,15 +14,19 @@ library(EnhancedVolcano)
 # Read in data
 
 ```{r}
-m1.mac <- read.csv(file = "Analysis_2023_08_29/results/m1_mac_Sig_Genes.csv") |> 
-  tibble::column_to_rownames(var = "symbols")
-
-
-```
-
-```{r}
-temp <- rownames(m1.mac)
-summary(m1.mac$symbols)
+m1.mac <- read.csv(file = "Analysis_2023_08_29/results/m1_mac_Sig_Genes.csv")
+m1.mac.deseq <- read.csv(file = "Analysis_2023_08_29/results/m1_mac_DESeq2_Genes.csv")
+ilc1 <- read.csv(file = "Analysis_2023_08_29/results/ilc1_Sig_Genes.csv")
+ilc3 <- read.csv(file = "Analysis_2023_08_29/results/ilc3_Sig_Genes.csv")
+nk.16neg <- read.csv(file = "Analysis_2023_08_29/results/nk_cd16_neg_Sig_Genes.csv")
+nk.16pos <- read.csv(file = "Analysis_2023_08_29/results/nk_cd16_pos_Sig_Genes.csv")
+pdc <- read.csv(file = "Analysis_2023_08_29/results/pdc_Sig_Genes.csv")
+dc1 <- read.csv(file = "Analysis_2023_08_29/results/dc1_Sig_Genes.csv")
+dc2 <- read.csv(file = "Analysis_2023_08_29/results/dc2_Sig_Genes.csv")
+dc5 <- read.csv(file = "Analysis_2023_08_29/results/dc5_Sig_Genes.csv")
+mmp12.mac <- read.csv(file = "Analysis_2023_08_29/results/mmp12_mac_Sig_Genes.csv")
+ptgd5.mac <- read.csv(file = "Analysis_2023_08_29/results/ptgd5_mac_Sig_Genes.csv")
+adc1 <- read.csv(file = "Analysis_2023_08_29/results/aDC1_Sig_Genes.csv")
 ```
 
 
@@ -32,19 +36,211 @@ summary(m1.mac$symbols)
 
 ```{r}
 EnhancedVolcano(m1.mac,
-                lab = symbols,
+                lab = m1.mac$symbols,
                 x = "avg_log2FC",
                 y = "p_val_adj",
                 title = "Downs Syndrome vs Healthy Control",
                 subtitle = "M1 Macrophage population")
-```
-
-```{r}
-ggsave(filename = paste0("volcano_example.png"),
+ggsave(filename = "Analysis_2023_09_06/m1.mac.volcano.png",
        width = 11,
        height = 8,
        units = "in")
 ```
+
+```{r}
+EnhancedVolcano(m1.mac.deseq,
+                lab = m1.mac.deseq$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "DESeq2: M1 Macrophage population")
+ggsave(filename = "Analysis_2023_09_06/m1.mac.deseq.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## ILC1
+
+```{r}
+EnhancedVolcano(ilc1,
+                lab = ilc1$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "ILC1 population")
+ggsave(filename = "Analysis_2023_09_06/ilc1.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## ILC3
+
+```{r}
+EnhancedVolcano(ilc3,
+                lab = ilc3$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "ILC3 population")
+ggsave(filename = "Analysis_2023_09_06/ilc3.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## CD16- NK cells
+
+```{r}
+EnhancedVolcano(nk.16neg,
+                lab = nk.16neg$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "CD16- NK cells")
+ggsave(filename = "Analysis_2023_09_06/nk.16neg.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## CD16+ NK cells
+
+```{r}
+EnhancedVolcano(nk.16pos,
+                lab = nk.16pos$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "CD16+ NK cells")
+ggsave(filename = "Analysis_2023_09_06/nk.16pos.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## pDC cells
+
+```{r}
+EnhancedVolcano(pdc,
+                lab = pdc$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "pDC cells")
+ggsave(filename = "Analysis_2023_09_06/pdc.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## DC1 Mature cells
+
+```{r}
+EnhancedVolcano(dc1,
+                lab = dc1$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "DC1 Mature cells")
+ggsave(filename = "Analysis_2023_09_06/dc1.mature.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## DC2 cells
+
+```{r}
+EnhancedVolcano(dc2,
+                lab = dc2$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "DC2 cells")
+ggsave(filename = "Analysis_2023_09_06/dc2.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## DC5 cells
+
+```{r}
+EnhancedVolcano(dc5,
+                lab = dc5$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "DC5 cells")
+ggsave(filename = "Analysis_2023_09_06/dc5.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## aDC1 cells
+
+```{r}
+EnhancedVolcano(adc1,
+                lab = adc1$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "DC5 cells")
+ggsave(filename = "Analysis_2023_09_06/adc1.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## IL7R MMP12 macrophages
+
+```{r}
+EnhancedVolcano(mmp12.mac,
+                lab = mmp12.mac$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "IL7R MMP12 macrophages")
+ggsave(filename = "Analysis_2023_09_06/mmp12.mac.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+## SELENOP FUCA1 PTGDS macrophages
+
+```{r}
+EnhancedVolcano(ptgd5.mac,
+                lab = ptgd5.mac$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "SELENOP FUCA1 PTGDS macrophages")
+ggsave(filename = "Analysis_2023_09_06/ptgd5.mac.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

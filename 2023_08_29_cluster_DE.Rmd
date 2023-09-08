@@ -1,0 +1,648 @@
+---
+title: "2023_08_29 Differential expression of scRNAseq clusters"
+#output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(AnnotationHub)
+library(AnnotationFilter)
+library(AnnotationDbi)
+library(slingshot)
+library(zellkonverter)
+library(BiocManager)
+library(remotes)
+library(devtools)
+library(R.utils)
+library(SeuratWrappers)
+library(harmony)
+library(ggpubr)
+library(gridExtra)
+library(rlist)
+library(tictoc)
+library(biomaRt)
+library(rio)
+library(readxl)
+library(tradeSeq)
+library(pheatmap)
+library(clustree)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(tidyseurat)
+library(dittoSeq)
+library(SingleR)
+library(celldex)
+library(SeuratData)
+library(skimr)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(org.Hs.eg.db)
+library(DropletUtils)
+library(qs)
+library(UpSetR)
+library(gplots)
+library(clusterProfiler)
+library(ReactomePA)
+library(gprofiler2)
+library(DESeq2)
+})
+```
+
+
+# Read in data: Post Anchor SCT Object
+
+```{r read in post anchor seurat}
+SCT_data_object = qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+# Initial wrangling and analysis
+
+Look at the number of each predicted cell id:
+
+```{r view predicted.ids}
+SCT_data_object@meta.data |> 
+  dplyr::count(predicted.id)
+```
+
+Look at the breakdown of predicted cells by sample:
+
+```{r predicted.ids/sample}
+cells_per_sample <- SCT_data_object@meta.data |>  
+  group_by(predicted.id) |> 
+  count(orig.ident) |> 
+  pivot_wider(names_from = orig.ident, values_from = n)
+```
+
+Save the results
+
+```{r saved predicted.ids/sample table}
+write_csv(cells_per_sample, file = paste0(folder.name, "/results/cell_id_per_sample.csv"))
+```
+
+Since there are two DS samples and two HC samples, I want to add a column that denotes ds or hc so I can use that for the DESeq comparison later
+
+```{r create group in metadata}
+ds_samples <- c("ds_tn_67", "ds_tn_6865")
+#hc_samples <- c("hc_65", "hc_69")
+
+SCT_data_object@meta.data <- SCT_data_object@meta.data |> 
+  dplyr::mutate(group = ifelse(orig.ident %in% ds_samples, "ds", "hc"),
+                .after = orig.ident)
+```
+
+# DE on Cell populations: DS vs HC 
+
+Using the group column created in the previous code chunk, we will make a subset of each cluster of interest and look at differential gene expression between the DS and HC cells within the cluster
+
+```{r view idents}
+head(Idents(SCT_data_object))
+```
+
+```{r set idents to predicted.id}
+Idents(SCT_data_object) = "predicted.id"
+```
+
+```{r view idents}
+head(Idents(SCT_data_object))
+```
+
+## M1 Macrophages for Dallas
+
+```{r m1.mac subset}
+m1.mac = subset(SCT_data_object, idents = c("M1 Macrophages"))
+```
+
+### Tzu's comparison
+
+```{r tzu m1.mac DE, ds67 vs hc69}
+m1.mac.t67.h69 = FindMarkers(m1.mac,
+                               assay = "RNA", slot = "data",
+                               group.by = "orig.ident",
+                               ident.1 = "ds_tn_67",
+                               ident.2 = "hc_69")
+```
+
+```{r tzu save results}
+m1.mac.t67.h69 |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "m1_mac_t67_h69_Sig_Genes.csv")
+```
+
+### My comparison after grouping by hs and dc
+
+Note: FindMarkers uses Wilcoxon sum rank test by default.
+
+```{r m1 DE}
+m1.mac.markers = FindMarkers(m1.mac,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save m1 de results}
+m1.mac.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/m1_mac_Sig_Genes.csv")
+```
+
+#### M1 Macrophage DESeq2 comparison
+
+Seurat FindMarkers uses Wilcoxon rank sum test for differential gene analysis. Here I will use DESeq2 to compare results
+
+To use DESeq2, I am adding a pseudo count of 1 to all genes. Without this step, DESeq cannot compute the geometric means because there is at least one 0 value for every gene across the sample.
+
+```{r m1 deseq}
+m1.mac[["RNA"]]@counts <- as.matrix(m1.mac[["RNA"]]@counts)+1
+m1.mac.deseq.markers <- FindMarkers(m1.mac,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+```
+
+```{r save m1 deseq}
+m1.mac.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/m1_mac_DESeq2_Genes.csv")
+```
+
+## NK cells for Elena
+
+### CD16+CD56- NK
+
+```{r nk16pos subset}
+nk.16.pos = subset(SCT_data_object, idents = c("CD16+CD56- NK"))
+```
+
+```{r nk16pos DE}
+nk.16.pos.markers = FindMarkers(nk.16.pos,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save nk16pos DE}
+nk.16.pos.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/nk_cd16_pos_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r nk16pos DE}
+nk.16.pos[["RNA"]]@counts <- as.matrix(nk.16.pos[["RNA"]]@counts)+1
+nk.16.pos.deseq.markers <- FindMarkers(nk.16.pos,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+nk.16.pos.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/nk_cd16_pos_DESeq2_Genes.csv")
+```
+
+### CD16-CD56- NK
+
+```{r nk16neg subset}
+nk.16.neg = subset(SCT_data_object, idents = c("CD16-CD56- NK"))
+```
+
+```{r nk16neg DE}
+nk.16.neg.markers = FindMarkers(nk.16.neg,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save nk16neg DE}
+nk.16.neg.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |>
+  write_csv(file = "Analysis_2023_08_29/results/nk_cd16_neg_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r nk16neg deseq}
+nk.16.neg[["RNA"]]@counts <- as.matrix(nk.16.neg[["RNA"]]@counts)+1
+nk.16.neg.deseq.markers <- FindMarkers(nk.16.neg,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+nk.16.neg.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/nk_cd16_neg_DESeq2_Genes.csv")
+```
+
+### pDCs
+
+```{r pdc subset}
+pdc = subset(SCT_data_object, idents = c("PDC"))
+```
+
+```{r pdc DE}
+pdc.markers = FindMarkers(pdc,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save pdc DE}
+pdc.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/pdc_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r pdc deseq}
+pdc[["RNA"]]@counts <- as.matrix(pdc[["RNA"]]@counts)+1
+pdc.deseq.markers <- FindMarkers(pdc,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+pdc.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/pdc_DESeq2_Genes.csv")
+```
+
+### ILC1
+
+```{r ilc1 subset}
+ilc1 = subset(SCT_data_object, idents = c("ILC1"))
+```
+
+```{r ilc1 DE}
+ilc1.markers = FindMarkers(ilc1,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save ilc1 de}
+ilc1.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/ilc1_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r ilc1 deseq}
+ilc1[["RNA"]]@counts <- as.matrix(ilc1[["RNA"]]@counts)+1
+ilc1.deseq.markers <- FindMarkers(ilc1,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+ilc1.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/ilc1_DESeq2_Genes.csv")
+```
+
+### ILC3
+
+```{r ilc3 subset}
+ilc3 = subset(SCT_data_object, idents = c("NKp44+ ILC3"))
+```
+
+```{r ilc3 DE}
+ilc3.markers = FindMarkers(ilc3,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save ilc3 DE}
+ilc3.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/ilc3_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r ilc3 deseq}
+ilc3[["RNA"]]@counts <- as.matrix(ilc3[["RNA"]]@counts)+1
+ilc3.deseq.markers <- FindMarkers(ilc3,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+ilc3.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/ilc3_DESeq2_Genes.csv")
+```
+
+### DC1 mature
+
+```{r dc1 subset}
+dc1 = subset(SCT_data_object, idents = c("DC1 mature"))
+```
+
+```{r dc1 DE}
+dc1.markers = FindMarkers(dc1,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save dc1 de}
+dc1.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/dc1_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r dc1 deseq}
+dc1[["RNA"]]@counts <- as.matrix(dc1[["RNA"]]@counts)+1
+dc1.deseq.markers <- FindMarkers(dc1,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+dc1.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/dc1_DESeq2_Genes.csv")
+```
+
+### DC2
+
+```{r dc2 subset}
+dc2 = subset(SCT_data_object, idents = c("DC2"))
+```
+
+```{r dc2 DE}
+dc2.markers = FindMarkers(dc2,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save dc2 DE}
+dc2.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/dc2_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r dc2 deseq}
+dc2[["RNA"]]@counts <- as.matrix(dc2[["RNA"]]@counts)+1
+dc2.deseq.markers <- FindMarkers(dc2,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+dc2.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/dc2_DESeq2_Genes.csv")
+```
+
+### DC5
+
+```{r dc5 subet}
+dc5 = subset(SCT_data_object, idents = c("DC5"))
+```
+
+```{r dc5 DE}
+dc5.markers = FindMarkers(dc5,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save dc5 DE}
+dc5.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/dc5_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r dc5 deseq}
+dc5[["RNA"]]@counts <- as.matrix(dc5[["RNA"]]@counts)+1
+dc5.deseq.markers <- FindMarkers(dc5,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+dc5.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/dc5_DESeq2_Genes.csv")
+```
+
+### IL7R MMP12 macrophages
+
+```{r mmp12 subset}
+mmp12.mac = subset(SCT_data_object, idents = c("IL7R MMP12 macrophages"))
+```
+
+```{r mmp12 DE}
+mmp12.mac.markers = FindMarkers(mmp12.mac,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save mmp12 DE}
+mmp12.mac.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/mmp12_mac_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r mmp12 dseq}
+mmp12.mac[["RNA"]]@counts <- as.matrix(mmp12.mac[["RNA"]]@counts)+1
+mmp12.mac.deseq.markers <- FindMarkers(mmp12.mac,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+mmp12.mac.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/mmp12_mac_DESeq2_Genes.csv")
+```
+
+### SELENOP FUCA1 PTGDS macrophages
+
+```{r ptgd5 subset}
+ptgd5.mac = subset(SCT_data_object, idents = c("SELENOP FUCA1 PTGDS macrophages"))
+```
+
+```{r ptgd5 DE}
+ptgd5.mac.markers = FindMarkers(ptgd5.mac,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+Save my results as a csv
+
+```{r save ptgd5 DE}
+ptgd5.mac.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/ptgd5_mac_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r ptgd5 deseq}
+ptgd.mac[["RNA"]]@counts <- as.matrix(ptgd.mac[["RNA"]]@counts)+1
+ptgd.mac.deseq.markers <- FindMarkers(ptgd.mac,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+ptgd.mac.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/ptgd_mac_DESeq2_Genes.csv")
+```
+
+### aDC1
+
+```{r adc1 subset}
+adc1 = subset(SCT_data_object, idents = c("aDC1"))
+```
+
+```{r adc1 DE}
+adc1.markers = FindMarkers(adc1,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+```{r save adc1 DE}
+adc1.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/aDC1_Sig_Genes.csv")
+```
+
+#### DESeq2
+
+```{r adc1 deseq}
+adc1[["RNA"]]@counts <- as.matrix(adc1[["RNA"]]@counts)+1
+adc1.deseq.markers <- FindMarkers(adc1,
+                                    assay = "RNA", slot = "data",
+                                    group.by = "group",
+                                    ident.1 = "ds",
+                                    ident.2 = "hc",
+                                    test.use = "DESeq2")
+adc1.deseq.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/DESeq2_results/adc1_DESeq2_Genes.csv")
+```
+
+
+.

@@ -10,17 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Import Libraries
 
-```{r}
-folder.name = "Analysis_2023_08_29"
+```{r dir folders}
+folder.name <- "Analysis_2023_08_29"
 
 if(!exists(folder.name)){
   dir.create(folder.name)
 }
 
-script.date = "2023_08_29"
+script.date <- "2023_08_29"
 ```
 
-```{r}
+```{r libraries}
 suppressPackageStartupMessages({
 library(SingleCellExperiment)
 library(Seurat)
@@ -79,7 +79,7 @@ library(DESeq2)
 Import and Merge
 ================
 
-```{r}
+```{r scRNA data}
 HC_69 <- Read10X_h5(filename = "data/raw_data/HC_69/filtered_feature_bc_matrix.h5")
 HC_65 <- Read10X_h5(filename =  "data/raw_data/HC_65/filtered_feature_bc_matrix.h5")
 DS_TN_67 <- Read10X_h5(filename = "data/raw_data/DS_TN_67/filtered_feature_bc_matrix.h5")
@@ -89,7 +89,7 @@ DS_TN_6865 <- Read10X_h5(filename = "data/raw_data/DS_TN_6865/filtered_feature_b
 Create Seurat Object
 ---------------------
 
-```{r}
+```{r create seurats}
 HC_69_Obj <- CreateSeuratObject(counts = HC_69, project = "hc_69")
 HC_65_Obj <- CreateSeuratObject(counts = HC_65, project = "hc_65")
 DS_TN_67_Obj <- CreateSeuratObject(counts = DS_TN_67, project = "ds_tn_67")
@@ -99,8 +99,8 @@ DS_TN_6865_Obj <- CreateSeuratObject(counts = DS_TN_6865, project = "ds_tn_6865"
 Merge
 -------
 
-```{r}
-merged_data_object = merge(x = HC_69_Obj,
+```{r merge seurats}
+merged_data_object <- merge(x = HC_69_Obj,
                            y = c(HC_65_Obj,
                                  DS_TN_67_Obj,
                                  DS_TN_6865_Obj),
@@ -110,29 +110,29 @@ merged_data_object = merge(x = HC_69_Obj,
                                            "ds_tn_6865"))
 ```
 
-```{r}
+```{r view merged seurat}
 merged_data_object
 ```
 
 Add Metadata
 ------------
-```{r}
+```{r view metadata}
 merged_data_object@meta.data
 ```
 
-```{r}
-merged_data_object$log10GenePerUMI = log10(merged_data_object$nFeature_RNA) / log10(merged_data_object$nCount_RNA)
+```{r add log10}
+merged_data_object$log10GenePerUMI <- log10(merged_data_object$nFeature_RNA) / log10(merged_data_object$nCount_RNA)
 ```
 
 Mitochondria Ratio
 -----------
 
 ```{r}
-merged_data_object$mitoPct = PercentageFeatureSet(merged_data_object, pattern = "^MT-")
-merged_data_object$mitoRatio = merged_data_object@meta.data$mitoPct / 100
+merged_data_object$mitoPct <- PercentageFeatureSet(merged_data_object, pattern = "^MT-")
+merged_data_object$mitoRatio <- merged_data_object@meta.data$mitoPct / 100
 ```
 
-```{r}
+```{r view metadata}
 merged_data_object@meta.data
 ```
 
@@ -142,24 +142,23 @@ Visualization
 The number of cell counts per sample
 ------------------------------------
 
-```{r}
+```{r plot counts/sample}
 merged_data_object |> 
-  ggplot(aes(x=orig.ident, fill=orig.ident)) +
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
   geom_bar() +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
   ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
-
 ```
 
 ## The number UMIs/transcripts per cell
 
 The UMI counts per cell should generally be above 500, that is the low end of what we expect. If UMI counts are between 500-1000 counts, it is usable but the cells probably should have been sequenced more deeply.
 
-```{r}
-merged_data_object %>%
-  ggplot(aes(color=, x=nCount_RNA, fill= orig.ident)) +
+```{r plot umis/transcript}
+merged_data_object |>
+  ggplot(aes(color = , x = nCount_RNA, fill = orig.ident)) +
   geom_density(alpha = 0.2) +
   scale_x_log10() +
   theme_classic() +
@@ -167,9 +166,9 @@ merged_data_object %>%
        y = "Cell density") +
   # ylab("Cell density") +
   geom_vline(xintercept = 500) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 500, label="500", y = 0.77), colour = "black", angle = 90, vjust=1.2, text=element_text(size=11))
-
-
+  geom_text(aes(x = 500, label = "500", y = 0.77), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size = 11))
 ```
 
 ## The number of genes detected per cell
@@ -178,28 +177,28 @@ Visualize the distribution of genes detected per cell via histogram
 
 On average, most cells should have at least 200 genes detected (see vertical line)
 
-```{r}
-merged_data_object %>%
-  ggplot(aes(color=orig.ident, x=nFeature_RNA, fill= orig.ident)) +
+```{r plot genes/cell}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = nFeature_RNA, fill = orig.ident)) +
   geom_density(alpha = 0.2) +
   theme_classic() +
   scale_x_log10() +
   geom_vline(xintercept = 200) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 200, label="500", y = 1.0), colour = "black", angle = 90, vjust=1.2, text=element_text(size=11))
-
+  geom_text(aes(x = 200, label = "500", y = 1.0), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size=11))
 ```
 
 ## The distribution of genes detected per cell via boxplot
 
-```{r}
-merged_data_object %>%
-  ggplot(aes(x=orig.ident, y=log10(nFeature_RNA), fill=orig.ident)) +
+```{r plot genes/cell boxplot}
+merged_data_object |>
+  ggplot(aes(x = orig.ident, y = log10(nFeature_RNA), fill = orig.ident)) +
   geom_boxplot() +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
   ggtitle("Number of Cells vs Number of Genes Raw/Pre-Filtered")
-
 ```
 
 ## Joint Filtering of UMIs vs genes detected
@@ -207,37 +206,41 @@ merged_data_object %>%
 Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
 Definitely want to remove cells in the lower left hand quadrant
 
-```{r}
+```{r join/filter umis vs genes}
 #This will take a long long time ...
-merged_data_object %>%
-  ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=mitoRatio)) +
+merged_data_object |>
+  ggplot(aes(x = nCount_RNA, y = nFeature_RNA, color = mitoRatio)) +
   geom_point() +
   scale_colour_gradient(low = "gray90", high = "black") +
-  stat_smooth(method=lm) +
+  stat_smooth(method = lm) +
   scale_x_log10() +
   scale_y_log10() +
   theme_classic() +
   geom_vline(xintercept = 500) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 500, label="500", y = 10000), colour = "black", angle = 90, vjust=1.2, text=element_text(size=11)) +
+  geom_text(aes(x = 500, label = "500", y = 10000), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text = element_text(size = 11)) +
   geom_hline(yintercept = 250) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 10000, label="250", y = 250), colour = "black", angle = 0, vjust=1.2, text=element_text(size=11)) +
+  geom_text(aes(x = 10000, label = "250", y = 250), 
+            colour = "black", angle = 0, vjust = 1.2, 
+            text=element_text(size = 11)) +
   facet_wrap(~orig.ident)
-
 ```
 
 ## Mitochondrial counts ratio
 
 Visualize the distribution of mitochondrial gene expression detected per cell
 
-```{r}
-merged_data_object %>%
-  ggplot(aes(color=orig.ident, x=mitoRatio, fill=orig.ident)) +
+```{r plot mito ratio}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = mitoRatio, fill = orig.ident)) +
   geom_density(alpha = 0.2) +
   scale_x_log10() +
   theme_classic() +
   geom_vline(xintercept = 0.40) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 0.4, label="40%", y = 0.77), colour = "black", angle = 90, vjust=1.2, text=element_text(size=11))
-
+  geom_text(aes(x = 0.4, label = "40%", y = 0.77), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text = element_text(size = 11))
 ```
 
 ## Complexity plot
@@ -246,32 +249,31 @@ Complexity - We can see the samples where we sequenced each cell less have a hig
 
 Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
 
-```{r}
-merged_data_object %>%
-  ggplot(aes(x=log10GenePerUMI, color = orig.ident, fill=orig.ident)) +
+```{r complexity plot}
+merged_data_object |>
+  ggplot(aes(x = log10GenePerUMI, color = orig.ident, fill = orig.ident)) +
   geom_density(alpha = 0.2) +
   theme_classic() +
   labs(x = "log10GenesPerUMI (Complexity)") +
   geom_vline(xintercept = 0.8) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
-  geom_text(aes(x = 0.8, label="80%", y = 11), colour = "black", angle = 90, vjust=1.2, text=element_text(size=11))
-
+  geom_text(aes(x = 0.8, label="80%", y = 11), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text=element_text(size = 11))
 ```
 
 ## Violin Plot
 
 Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
 
-```{r}
-# VlnPlot(merged_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```{r vln mito data}
 VlnPlot(merged_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
-
 ```
 
 Cell Level Filter
 =================
 
-```{r}
-filtered_data_object <- merged_data_object %>%
+```{r filter rna count and mito}
+filtered_data_object <- merged_data_object |>
   filter(nFeature_RNA >= 200 &
            nCount_RNA >= 500 &
            mitoPct < 20)
@@ -282,8 +284,8 @@ Gene Level Filter
 
 ### Extract counts
 
-```{r}
-counts = GetAssayData(filtered_data_object, slot = "counts")
+```{r get counts}
+counts <- GetAssayData(filtered_data_object, slot = "counts")
 ```
 
 Output a logical matrix specifying for each gene on whether or not there are more than zero counts per cell
@@ -298,7 +300,7 @@ Now, we will perform some filtering by prevalence. If a gene is only expressed i
 
 Sums all TRUE values and returns TRUE if more than 10 TRUE values per gene
 
-```{r}
+```{r filter low genes out}
 keep_genes <- Matrix::rowSums(nonzero) >= 10
 ```
 
@@ -311,11 +313,9 @@ filtered_data_object <- CreateSeuratObject(filtered_counts, meta.data = filtered
 ```
 
 ```{r}
-filtered_data_object@meta.data %>% 
+filtered_data_object@meta.data |> 
   dplyr::count(orig.ident)
 ```
-
-
 
 Post Visualization
 ==================
@@ -323,26 +323,23 @@ Post Visualization
 The number of cell counts per sample
 ------------------------------------
 
-```{r}
-filtered_data_object %>%
-  ggplot(aes(x=orig.ident, fill=orig.ident)) +
+```{r plot cells/sample}
+filtered_data_object |>
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
   geom_bar() +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
   ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
-
 ```
 
 ## Violin Plot
 
 Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
 
-```{r}
-# VlnPlot(merged_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```{r vln counts and mito}
 VlnPlot(filtered_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
 ```
-
 
 SCTransform Normalization
 =========================
@@ -351,27 +348,27 @@ SCTransform Normalization
 
 Before we run this for loop, we know that the output can generate large R objects/variables in terms of memory. If we have a large dataset, then we might need to adjust the limit for allowable object sizes within R (Default is 500 * 1024 ^ 2 = 500 Mb) using the following code:
 
-```{r}
+```{r increase memory}
 options(future.globals.maxSize = 14000 * 1024^2) ## 14 GB (I think ...)
 ```
 
-```{r}
-SCT_data_object = filtered_data_object %>%
+```{r view SCTransform}
+SCT_data_object <- filtered_data_object |>
   SCTransform(.)
 ```
 
 SAVE POINT
 ==========
 
-```{r}
+```{r save merged seurat}
 #saveRDS(SCT_data_object, file = "data/TidySeuratify_SCT_data_object.rds")
 ```
 
-```{r}
-SCT_data_object = readRDS(file = "data/TidySeuratify_SCT_data_object.rds")
+```{r load merged seurat}
+SCT_data_object <- readRDS(file = "data/TidySeuratify_SCT_data_object.rds")
 ```
 
-```{r}
+```{r view seurat}
 SCT_data_object
 ```
 
@@ -380,12 +377,12 @@ PC Selection (FindVar → Scale → PCA → UMAP→ )
 
 ```{r}
 set.seed(123)
-SCT_data_object <- SCT_data_object %>%
+SCT_data_object <- SCT_data_object |>
   FindVariableFeatures(.,
                        selection.method = "vsn",
                        nfeatures = 2000,
-                       verbose = F) %>%
-  ScaleData(.) %>%
+                       verbose = F) |>
+  ScaleData(.) |>
   RunPCA(.)
 ```
 
@@ -406,9 +403,7 @@ co2
 ```{r}
 pcs <- min(co1, co2)
 pcs
-
 ```
-
 
 ```{r}
 plot_df <- data.frame(pct = pct,
@@ -422,25 +417,21 @@ ggplot(plot_df, aes(cumu, pct, label = rank, color = rank > pcs)) +
   # geom_vline(xintercept = 75, color = "grey") +
   # geom_hline(yintercept = min(pct[pct > 5]), color = "grey") +
   theme_bw()
-
 ```
-
-
 
 Clustering (FindNeighbors → FindClusters )
 ========================================
 
 ```{r}
 # DefaultAssay(SCT_data_object) = "RNA" ?? Not sure this is true ... maybe I still use SCTransformed values to "Find Cluster" ... 
-SCT_data_object <- SCT_data_object %>%
-  FindNeighbors(., dims = 1:pcs, verbose = F) %>%
-  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) %>%
-  # FindClusters(., method = "igraph", verbose = F) %>%
+SCT_data_object <- SCT_data_object |>
+  FindNeighbors(., dims = 1:pcs, verbose = F) |>
+  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |>
+  # FindClusters(., method = "igraph", verbose = F) |>
   RunUMAP(.,
           dims = 1:40,
           reduction = "pca",
           n.components = 3L)
-
 ```
 
 Tally Clusters
@@ -450,16 +441,15 @@ Tally Clusters
 SCT_data_object@meta.data
 ```
 
-
 ```{r}
-SCT_data_object %>%
-  as_tibble() %>%
-  select_at(vars(contains("SCT_snn_res"))) %>%
+SCT_data_object |>
+  as_tibble() |>
+  select_at(vars(contains("SCT_snn_res"))) |>
   pivot_longer(cols = 1:5,
                names_to = "Resolution",
-               values_to = "cluster") %>%
-  mutate(cluster = as.numeric(cluster)) %>%
-  group_by(Resolution) %>%
+               values_to = "cluster") |>
+  mutate(cluster = as.numeric(cluster)) |>
+  group_by(Resolution) |>
   summarise(mean = mean(cluster, rm.na = T),
             max = max(cluster))
 ```
@@ -487,21 +477,20 @@ dittoDimPlot(SCT_data_object,
 cluster5.markers <- FindMarkers(SCT_data_object, ident.1 = 5, min.pct = 0.25)
 ```
 
-
 SAVE POINT postClustering (5/15/2023)
 ======================
 
 Object before going into cell labeling
 
-```{r}
+```{r save post cluster seurat}
 #saveRDS(SCT_data_object, file = "data/2023_08_29_SCT_data_object_postClustering.rds")
 ```
 
-```{r}
-SCT_data_object = readRDS(file = "data/2023_08_29_SCT_data_object_postClustering.rds")
+```{r load post cluster seurat}
+#SCT_data_object <- readRDS(file = "data/2023_08_29_SCT_data_object_postClustering.rds")
 ```
 
-```{r}
+```{r view metadata}
 SCT_data_object@meta.data
 ```
 
@@ -513,93 +502,89 @@ Collect individual Tonsil single cell (labeled) dataset and combine them for "an
 PDC
 -------
 
-```{r}
-HCATonsil.PDC = readRDS("data/hca_data/20220215_PDC_seurat_obj.rds")
+```{r read pdc data}
+HCATonsil.PDC <- readRDS("data/hca_data/20220215_PDC_seurat_obj.rds")
 ```
 
-```{r}
-HCATonsil.PDC@meta.data %>% 
+```{r view pdc counts}
+HCATonsil.PDC@meta.data |> 
   dplyr::count(annotation_20220215)
 ```
 
 myeloid
 ----------
 
-```{r}
-HCATonsil.myeloid = readRDS("data/hca_data/20220215_myeloid_seurat_obj.rds")
+```{r read myeloid data}
+HCATonsil.myeloid <- readRDS("data/hca_data/20220215_myeloid_seurat_obj.rds")
 ```
 
-```{r}
-HCATonsil.myeloid@meta.data %>% 
+```{r view myeloid counts}
+HCATonsil.myeloid@meta.data |> 
   dplyr::count(annotation_20220215) 
 ```
 
 ILC NK
 ---------
 
-```{r}
-HCATonsil.ILC.NK = readRDS("data/hca_data/20220215_ILC_NK_seurat_obj.rds")
+```{r read ilc/nk data}
+HCATonsil.ILC.NK <- readRDS("data/hca_data/20220215_ILC_NK_seurat_obj.rds")
 ```
 
-```{r}
-HCATonsil.ILC.NK@meta.data %>% 
+```{r view ilc/nk counts}
+HCATonsil.ILC.NK@meta.data |> 
   dplyr::count(annotation_20220215) 
 ```
 
 PC
 -------
 
-```{r}
-HCATonsil.PC = readRDS("data/hca_data/20220215_PC_seurat_obj.rds")
+```{r read pc data}
+HCATonsil.PC <- readRDS("data/hca_data/20220215_PC_seurat_obj.rds")
 ```
 
-```{r}
-HCATonsil.PC %>% 
+```{r view pc counts}
+HCATonsil.PC |> 
   dplyr::count(annotation_20220215)
 ```
-
-
 
 Combined
 ---------
 
-```{r}
-HCATonsil.combined = merge(x = HCATonsil.PDC, 
+```{r merge pdc, myeloid, ilc/nk, pc}
+HCATonsil.combined <- merge(x = HCATonsil.PDC, 
                            y = c(HCATonsil.myeloid, HCATonsil.ILC.NK, HCATonsil.PC),
                            add.cell.id = c("PDC", "myeloid", "ILC_NK", "PC"))
 ```
 
-```{r}
-HCATonsil.combined@meta.data %>% 
+```{r view merged counts}
+HCATonsil.combined@meta.data |> 
   dplyr::count(annotation_20220215)
 ```
 
 ### Recluster
 
-```{r}
+```{r recluster}
 set.seed(123)
-HCATonsil.combined = HCATonsil.combined %>% 
-  NormalizeData(.) %>% 
+HCATonsil.combined <- HCATonsil.combined  |>  
+  NormalizeData(.) |> 
   FindVariableFeatures(.,
                        # selection.method = "vsn",
                        nfeatures = 2000,
-                       verbose = T) %>% 
-  ScaleData(.) %>% 
-  RunPCA(.) %>% 
-  FindNeighbors(., dims = 1:50, verbose = F) %>% 
-  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) %>% 
+                       verbose = T) |> 
+  ScaleData(.) |> 
+  RunPCA(.) |> 
+  FindNeighbors(., dims = 1:50, verbose = F) |> 
+  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |> 
   RunUMAP(.,
           dims = 1:40,
           reduction = "pca")
 ```
 
-```{r}
+```{r view metadata}
 HCATonsil.combined@meta.data
 ```
 
-
 ```{r}
-# Idents(SCT_data_object) <- "SCT_snn_res.0.3" # name is picked from column name of resolutions
 dittoDimPlot(HCATonsil.combined,
              # var = "RNA_snn_res.0.4",
              var = "annotation_20220215",
@@ -622,62 +607,54 @@ FindAnchor
 ==========
 
 ```{r}
-intersect.feature = intersect(rownames(SCT_data_object), rownames(HCATonsil.combined))
+intersect.feature <- intersect(rownames(SCT_data_object), rownames(HCATonsil.combined))
 ```
 
 ```{r}
 DefaultAssay(SCT_data_object) <- "RNA"
 
 # transfer cell type labels from reference to query
-transfer_anchors <- FindTransferAnchors(
-  reference = HCATonsil.combined,
-  query = SCT_data_object,
-  features = intersect.feature,
-  # normalization.method = "",
-  reference.reduction = "pca",
-  recompute.residuals = T,
-  dims = 1:50
-)
+transfer_anchors <- FindTransferAnchors(reference = HCATonsil.combined,
+                                        query = SCT_data_object,
+                                        features = intersect.feature,
+                                        # normalization.method = "",
+                                        reference.reduction = "pca",
+                                        recompute.residuals = T,
+                                        dims = 1:50)
 
-predictions <- TransferData(
-  anchorset = transfer_anchors, 
-  refdata = HCATonsil.combined$annotation_20220215,
-  weight.reduction = SCT_data_object[['pca']], ## using query data
-  dims = 1:50
-)
+predictions <- TransferData(anchorset = transfer_anchors, 
+                            refdata = HCATonsil.combined$annotation_20220215,
+                            weight.reduction = SCT_data_object[['pca']], ## using query data
+                            dims = 1:50)
 
-SCT_data_object <- AddMetaData(
-  object = SCT_data_object,
-  metadata = predictions
-)
+SCT_data_object <- AddMetaData(object = SCT_data_object,
+                               metadata = predictions)
 ```
 
 ```{r}
-SCT_data_object@meta.data %>% 
+SCT_data_object@meta.data |> 
   dplyr::count(predicted.id)
 ```
 
+## SAVE: Post Anchor SCT Object
 
-## SAVE: Anchor
-
-```{r}
+```{r save anchored seurat}
 #qsave(SCT_data_object, "data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
 ```
 
-```{r}
-SCT_data_object = qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```{r load anchored seurat}
+SCT_data_object <- qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
 ```
 
 # dittoDimPlot
 
 ## Plot All
 
-```{r}
+```{r max ggrepel points}
 options(ggrepel.max.overlaps = Inf)
 ```
 
-
-```{r}
+```{r UMAP}
 dittoDimPlot(SCT_data_object,
              var = "predicted.id",
              # do.hover = T,
@@ -693,32 +670,20 @@ dittoDimPlot(SCT_data_object,
 ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_", script.date, ".pdf"))
 ```
 
-```{r}
-SCT_data_object@meta.data %>% 
+```{r view orig.idents}
+SCT_data_object@meta.data |> 
   dplyr::count(orig.ident)
 ```
-
-### Background genes
-
-I think this is needed later for pathway analysis:
-
-```{r}
-length(rownames(SCT_data_object))
-
-bg.genes.entrez = clusterProfiler::bitr(rownames(SCT_data_object), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
-bg.genes.entrez
-```
-
 
 Umap: hc_65
 ----------
 
-```{r}
+```{r subset hc65}
 Idents(SCT_data_object) = "orig.ident"
 hc_65_seurat = subset(SCT_data_object, idents = "hc_65")
 ```
 
-```{r}
+```{r UMAP hc65}
 dittoDimPlot(hc_65_seurat,
              var = "predicted.id",
              # do.hover = T,
@@ -737,12 +702,12 @@ ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Ancho
 Umap: ds_tn_67
 --------------
 
-```{r}
+```{r subset ds67}
 Idents(SCT_data_object) = "orig.ident"
 ds_tn_67_seurat = subset(SCT_data_object, idents = "ds_tn_67")
 ```
 
-```{r}
+```{r UMAP ds67}
 dittoDimPlot(ds_tn_67_seurat,
              var = "predicted.id",
              # do.hover = T,
@@ -761,12 +726,12 @@ ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Ancho
 Umap: hc_69
 --------------
 
-```{r}
+```{r subset hc69}
 Idents(SCT_data_object) = "orig.ident"
 hc_69_seurat = subset(SCT_data_object, idents = "hc_69")
 ```
 
-```{r}
+```{r UMAP hc69}
 dittoDimPlot(hc_69_seurat,
              var = "predicted.id",
              # do.hover = T,
@@ -785,12 +750,12 @@ ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Ancho
 Umap: ds_tn_6865
 --------------
 
-```{r}
+```{r subset ds6865}
 Idents(SCT_data_object) = "orig.ident"
 ds_tn_6865_seurat = subset(SCT_data_object, idents = "ds_tn_6865")
 ```
 
-```{r}
+```{r UMAP ds6865}
 dittoDimPlot(ds_tn_6865_seurat,
              var = "predicted.id",
              # do.hover = T,
@@ -806,337 +771,182 @@ dittoDimPlot(ds_tn_6865_seurat,
 ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_ds_tn_6865_", script.date, ".pdf"))
 ```
 
-# DE
+# Visualizations
 
-Look at the number of each predicted cell id:
+## Violin Plots
 
-```{r}
-SCT_data_object@meta.data %>% 
-  dplyr::count(predicted.id)
-```
+### VEGF
 
-Look at the breakdown of predicted cells by sample:
-
-```{r}
-cells_per_sample <- SCT_data_object@meta.data |>  
-  group_by(predicted.id) |> 
-  count(orig.ident) |> 
-  pivot_wider(names_from = orig.ident, values_from = n)
-```
-
-Save the results
-
-```{r}
-write_csv(cells_per_sample, file = paste0(folder.name, "/results/cell_id_per_sample.csv"))
-```
-
-Since there are two DS samples and two HC samples, I want to add a column that denotes ds or hc so I can use that for the DESeq comparison later
-
-```{r}
-ds_samples <- c("ds_tn_67", "ds_tn_6865")
-#hc_samples <- c("hc_65", "hc_69")
-
-SCT_data_object@meta.data <- SCT_data_object@meta.data |> 
-  dplyr::mutate(group = ifelse(orig.ident %in% ds_samples, "ds", "hc"),
-                .after = orig.ident)
-```
-
-
-## M1 Macrophages for Dallas
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-m1.mac = subset(SCT_data_object, idents = c("M1 Macrophages"))
-```
-
-### Tzu's comparison
-
-```{r}
-m1.mac.t67.h69 = FindMarkers(m1.mac,
-                               assay = "RNA", slot = "data",
-                               group.by = "orig.ident",
-                               ident.1 = "ds_tn_67",
-                               ident.2 = "hc_69")
-```
-
-```{r}
-m1.mac.t67.h69 %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "m1_mac_t67_h69_Sig_Genes.csv")
-```
-
-### My comparison after grouping by hs and dc
-
-Running FindMarkers on these two groups essentially performs DESeq between them.
-
-```{r}
-m1.mac.markers = FindMarkers(m1.mac,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-
-```
-
-Save my results as a csv
-
-```{r}
-m1.mac.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/m1_mac_Sig_Genes.csv")
-```
-
-## NK cells for Elena
-
-### CD16+CD56- NK
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-nk.16.pos = subset(SCT_data_object, idents = c("CD16+CD56- NK"))
-```
-
-```{r}
-nk.16.pos.markers = FindMarkers(nk.16.pos,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-```
-
-Save my results as a csv
-
-```{r}
-nk.16.pos.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/nk_cd16_pos_Sig_Genes.csv")
-```
-
-### CD16-CD56- NK
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-nk.16.neg = subset(SCT_data_object, idents = c("CD16-CD56- NK"))
-```
-
-```{r}
-nk.16.neg.markers = FindMarkers(nk.16.neg,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-```
-
-Save my results as a csv
-
-```{r}
-nk.16.neg.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>%
-  write_csv(file = "Analysis_2023_08_29/results/nk_cd16_neg_Sig_Genes.csv")
-```
-
-### pDCs
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-pdc = subset(SCT_data_object, idents = c("PDC"))
-```
-
-```{r}
-pdc.markers = FindMarkers(pdc,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-```
-
-Save my results as a csv
-
-```{r}
-pdc.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/pdc_Sig_Genes.csv")
-```
-
-### ILC1
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-ilc1 = subset(SCT_data_object, idents = c("ILC1"))
-```
-
-```{r}
-ilc1.markers = FindMarkers(ilc1,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-```
-
-Save my results as a csv
-
-```{r}
-ilc1.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/ilc1_Sig_Genes.csv")
-```
-
-### ILC3
-
-```{r}
-Idents(SCT_data_object) = "predicted.id"
-ilc3 = subset(SCT_data_object, idents = c("NKp44+ ILC3"))
-```
-
-```{r}
-ilc3.markers = FindMarkers(ilc3,
-                               assay = "RNA", slot = "data",
-                               group.by = "group",
-                               ident.1 = "ds",
-                               ident.2 = "hc")
-```
-
-Save my results as a csv
-
-```{r}
-ilc3.markers %>% 
-  rownames_to_column(var = "symbols") %>% 
-  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) %>% 
-  relocate(desc, .after = symbols) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/ilc3_Sig_Genes.csv")
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Pathway
-
-### M1 Macrophages
-
-```{r}
-m1.mac.markers %>% 
-  dplyr::filter(p_val_adj < 1e-22) %>% 
-  rownames_to_column(var = "symbols") %>% 
-  pull(symbols) -> m1.mac.markers.top.symbols
-```
-
-
-```{r}
-up.genes.entrez = clusterProfiler::bitr(m1.mac.markers.top.symbols, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
-# up.genes.entrez
-
-up.ORA.GO = enrichGO(gene = up.genes.entrez$ENTREZID,
-                     universe = bg.genes.entrez$ENTREZID,
-                     OrgDb = org.Hs.eg.db,
-                     ont = "BP",
-                     pAdjustMethod = "BH",
-                     pvalueCutoff = 0.01,
-                     qvalueCutoff = 0.05,
-                     readable = T)
-data.frame(up.ORA.GO) %>% 
-  write_csv(file = "Analysis_2023_08_29/results/m1_mac_pathway_analysis.csv")
-```
-
-
-
-
-```{r}
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Other Visualizations
-
-```{r}
-ncam_top_10 <- c("CD16-CD56- NK", "PB", "CD16+CD56- NK", "NKp44+ ILC3", "DC1 mature", "DC5", "aDC1", "DC2", "class switch MBC")
+```{r vln vegfa}
+#ncam_top_10 <- c("CD16-CD56- NK", "PB", "CD16+CD56- NK", "NKp44+ ILC3", "DC1 mature", "DC5", "aDC1", "DC2", "class switch MBC")
   
 VlnPlot(SCT_data_object,
-        features = "NCAM1",
-        idents = ncam_top_10,
+        features = "VEGFA",
+        #idents = ncam_top_10,
         sort = "increasing") + 
   theme(legend.position = 'none',
         axis.text = element_text(size=8))
-ggsave(filename = paste0(folder.name, "/plots/CD56_violin_plot_", script.date, ".pdf"),
-       width = 10,
+
+ggsave(filename = "Analysis_2023_08_29/plots/VEGF_violin_plot.pdf",
+       width = 11,
        height = 8,
        units = "in")
 ```
 
 
+### COL genes
+
+```{r vln col1a1}
+VlnPlot(SCT_data_object,
+        features = "COL1A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL1A1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a1}
+VlnPlot(SCT_data_object,
+        features = "COL6A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a2}
+VlnPlot(SCT_data_object,
+        features = "COL6A2",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A2_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a3}
+VlnPlot(SCT_data_object,
+        features = "COL6A3",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A3_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col4a1}
+VlnPlot(SCT_data_object,
+        features = "COL4A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL4A1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+### Other genes Elena asked for
+
+```{r vln il1b}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/IL1B_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln tgfb1}
+VlnPlot(SCT_data_object,
+        features = "TGFB1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/TGFB1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+### Other genes of interest
+
+```{r vln cxcl8}
+VlnPlot(SCT_data_object,
+        features = "CXCL8",
+        #idents = ncam_top_10,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+```
+
+```{r vln igll5}
+VlnPlot(SCT_data_object,
+        features = "IGLL5",
+        #idents = ncam_top_10,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+```
 
 
 
 
-```{r this will take a long time!!!}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Individual cluster markers; does gene DE comparing cluster to all other cells.
+
+```{r FindMarkers, all clusters}
 cluster.markers <- FindAllMarkers(SCT_data_object, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 
-cluster.markers %>%
-    group_by(predicted.id) %>%
+cluster.markers |>
+    group_by(predicted.id) |>
     slice_max(n = 2, order_by = avg_log2FC)
 ```
 
@@ -1144,10 +954,9 @@ cluster.markers %>%
 saveRDS(cluster.markers, file = paste0(folder.name, "cluster_markers_", script.date, ".rds"))
 ```
 
-
 ```{r heatmap plot}
-SCT_data_object %>%
-    group_by(predicted.id) %>%
+SCT_data_object |>
+    group_by(predicted.id) |>
     top_n(n = 10, wt = avg_log2FC) -> top10
 
 DoHeatmap(pbmc, 
@@ -1159,17 +968,12 @@ DoHeatmap(pbmc,
 
 
 
+
+
+
 ```{r}
-FeaturePlot(SCT_data_object, features = "NCAM1")
+sessionInfo()
 ```
-
-```{r}
-View(Idents(SCT_data_object))
-```
-
-
-
-
 
 
 
