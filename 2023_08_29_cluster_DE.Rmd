@@ -645,4 +645,47 @@ adc1.deseq.markers |>
 ```
 
 
-.
+### Monocytes
+
+```{r mono subset}
+mono = subset(SCT_data_object, idents = c("Monocytes"))
+```
+
+```{r mono DE}
+mono.markers = FindMarkers(mono,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+```{r save mono DE}
+mono.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/mono_Sig_Genes.csv")
+```
+
+### Neutrophils and Granulocytes
+
+```{r neutro subset}
+neutro = subset(SCT_data_object, idents = c("Neutrophil Granulocytes"))
+```
+
+```{r neutro DE}
+neutro.markers = FindMarkers(neutro,
+                               assay = "RNA", slot = "data",
+                               group.by = "group",
+                               ident.1 = "ds",
+                               ident.2 = "hc")
+```
+
+```{r save neutro DE}
+neutro.markers |> 
+  rownames_to_column(var = "symbols") |> 
+  mutate(desc = mapIds(org.Hs.eg.db, keys = symbols, keytype = "SYMBOL", column = "GENENAME")) |> 
+  relocate(desc, .after = symbols) |> 
+  write_csv(file = "Analysis_2023_08_29/results/neutro_Sig_Genes.csv")
+```
+

@@ -27,6 +27,9 @@ dc5 <- read.csv(file = "Analysis_2023_08_29/results/dc5_Sig_Genes.csv")
 mmp12.mac <- read.csv(file = "Analysis_2023_08_29/results/mmp12_mac_Sig_Genes.csv")
 ptgd5.mac <- read.csv(file = "Analysis_2023_08_29/results/ptgd5_mac_Sig_Genes.csv")
 adc1 <- read.csv(file = "Analysis_2023_08_29/results/aDC1_Sig_Genes.csv")
+neutro <- read.csv(file = "Analysis_2023_08_29/results/neutro_Sig_Genes.csv")
+mono <- read.csv(file = "Analysis_2023_08_29/results/mono_Sig_Genes.csv")
+
 ```
 
 
@@ -225,9 +228,35 @@ ggsave(filename = "Analysis_2023_09_06/ptgd5.mac.volcano.png",
        units = "in")
 ```
 
+## Monocytes
 
+```{r}
+EnhancedVolcano(mono,
+                lab = mono$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "Monocytes")
+ggsave(filename = "Analysis_2023_09_06/mono.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
 
+## Neutrophil Granulocytes
 
+```{r}
+EnhancedVolcano(neutro,
+                lab = neutro$symbols,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+                title = "Downs Syndrome vs Healthy Control",
+                subtitle = "Neutrophils Granulocytes")
+ggsave(filename = "Analysis_2023_09_06/neutro.volcano.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
 
 
 
