@@ -1,0 +1,108 @@
+---
+title: "2023_09_10 Seurat subset of DS vs HC donors"
+#output: html_notebook
+---
+
+This notebook will subset our initial Seurat object, made of 2 downs syndome (ds) and two healthy controls (hc). We will make subsets of the individual donors and then do some visual comparison of gene expression.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(AnnotationHub)
+library(AnnotationFilter)
+library(AnnotationDbi)
+library(slingshot)
+library(zellkonverter)
+library(BiocManager)
+library(remotes)
+library(devtools)
+library(R.utils)
+library(SeuratWrappers)
+library(harmony)
+library(ggpubr)
+library(gridExtra)
+library(rlist)
+library(tictoc)
+library(biomaRt)
+library(rio)
+library(readxl)
+library(tradeSeq)
+library(pheatmap)
+library(clustree)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(tidyseurat)
+library(dittoSeq)
+library(SingleR)
+library(celldex)
+library(SeuratData)
+library(skimr)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(org.Hs.eg.db)
+library(DropletUtils)
+library(qs)
+library(UpSetR)
+library(gplots)
+library(clusterProfiler)
+library(ReactomePA)
+library(gprofiler2)
+library(DESeq2)
+})
+```
+
+
+# Read in data: Post Anchor SCT Object
+
+```{r read in post anchor seurat}
+SCT_data_object = qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+# Initial look at cells per sample
+
+Look at the breakdown of predicted cells by sample:
+
+```{r predicted.ids/sample}
+SCT_data_object@meta.data |>  
+  group_by(predicted.id) |> 
+  count(orig.ident) |> 
+  pivot_wider(names_from = orig.ident, values_from = n)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
