@@ -45,14 +45,30 @@ SCT_data_object@meta.data <- SCT_data_object@meta.data |>
                 .after = orig.ident)
 ```
 
-Run this chunk if removing ds_tn_6865 is desired.
+```{r}
+View(SCT_data_object@meta.data)
+```
 
+Run this chunk if removing ds_tn_6865 is desired.
 ```{r remove ds_6865}
 Idents(SCT_data_object) <- "orig.ident"
 SCT_data_object <- subset(SCT_data_object, idents = c("hc_65", "hc_69","ds_tn_67"))
 ```
 
-# Visualization
+# Subsetting
+
+## Subset Donors
+
+```{r}
+Idents(SCT_data_object) <- "orig.ident"
+ds_67 <- subset(SCT_data_object, idents = c("ds_tn_67"))
+ds_tn_6865 <- subset(SCT_data_object, idents = c("ds_tn_6865"))
+hc_65 <- subset(SCT_data_object, idents = c("hc_65"))
+hc_69 <- subset(SCT_data_object, idents = c("hc_69"))
+```
+
+
+## Subset clusters
 
 ```{r cluster subsets}
 Idents(SCT_data_object) <- "predicted.id"
@@ -62,28 +78,142 @@ m1.mac <- subset(SCT_data_object, idents = c("M1 Macrophages"))
 
 ## Subset visualizations
 
-### M1 Macrophages
+### M1 Macrophages: Gene expression amongst clusters of Individual donors
 
-```{r }
+```{r}
+Idents(ds_67) <- "predicted.id"
+Idents(ds_tn_6865) <- "predicted.id"
+Idents(hc_65) <- "predicted.id"
+Idents(hc_69) <- "predicted.id"
+```
+
+```{r}
+a <- VlnPlot(ds_67,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, ds_67")
+
+b <- VlnPlot(ds_tn_6865,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, ds_tn_6865")
+
+c <- VlnPlot(hc_65,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, hc_65")
+
+d <- VlnPlot(hc_69,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, hc_69")
+```
+
+```{r}
+e <- ggpubr::ggarrange(a, b, c, d,
+                    ncol = 2, nrow = 2)
+e
+ggsave(filename = "Analysis_2023_09_10/plots/VEGFA.by.sample.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+### M1 Macrophages: Gene expression amongst clusters of condition
+
+```{r cluster subsets}
+Idents(SCT_data_object) <- "group"
+ds_object <- subset(SCT_data_object, idents = c("ds"))
+hc_object <- subset(SCT_data_object, idents = c("hc"))
+```
+
+VEGF violin plots of DS and HC
+```{r}
+Idents(ds_object) <- "predicted.id"
+Idents(hc_object) <- "predicted.id"
+a <- VlnPlot(ds_object,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, DS samples")
+
+b <- VlnPlot(hc_object,
+        features = "VEGFA",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "VEGFA, NDS samples")
+
+c <- ggpubr::ggarrange(a, b,
+                    nrow = 2)
+c
+ggsave(filename = "Analysis_2023_09_10/plots/VEGFA.by.condition.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+KLRC2 violin plots of DS and HC
+
+```{r}
+a <- VlnPlot(ds_object,
+        features = "KLRC2",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "KLRC2, DS samples")
+
+b <- VlnPlot(hc_object,
+        features = "KLRC2",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "KLRC2, NDS samples")
+
+c <- ggpubr::ggarrange(a, b,
+                    ncol = 2)
+c
+ggsave(filename = "Analysis_2023_09_10/plots/KLRC2.by.condition.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+
+
+
+### M1 Macrophages : Single gene (no clusters) across donors/condition
+
+```{r}
 VlnPlot(m1.mac,
         features = "VEGFA",
         group.by = "orig.ident",
         sort = "increasing") + 
   theme(legend.position = 'none',
-        axis.text = element_text(size=8))
+        axis.text = element_text(size = 8))
+        
 ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.sample.png",
        width = 11,
        height = 8,
        units = "in")
 ```
 
-```{r }
+```{r}
 VlnPlot(m1.mac,
         features = "VEGFA",
         group.by = "group",
         sort = "increasing") + 
   theme(legend.position = 'none',
-        axis.text = element_text(size=8))
+        axis.text = element_text(size =8))
 ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.condition.png",
        width = 11,
        height = 8,
@@ -92,6 +222,9 @@ ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.condition.png",
 
 
 
+```{r}
+rm(m1.mac)
+```
 
 
 
