@@ -13,60 +13,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r libraries}
 suppressPackageStartupMessages({
-library(SingleCellExperiment)
 library(Seurat)
 library(tidyverse)
-library(Matrix)
-library(scales)
-library(cowplot)
-library(RCurl)
-library(AnnotationHub)
-library(AnnotationFilter)
-library(AnnotationDbi)
-library(slingshot)
-library(zellkonverter)
-library(BiocManager)
-library(remotes)
-library(devtools)
-library(R.utils)
-library(SeuratWrappers)
-library(harmony)
-library(ggpubr)
-library(gridExtra)
-library(rlist)
-library(tictoc)
-library(biomaRt)
-library(rio)
-library(readxl)
-library(tradeSeq)
-library(pheatmap)
-library(clustree)
-library(dplyr)
-library(tidyr)
-library(purrr)
-library(magrittr)
-library(ggplot2)
-library(tidyseurat)
-library(dittoSeq)
-library(SingleR)
-library(celldex)
-library(SeuratData)
-library(skimr)
-library(Signac)
-library(EnsDb.Hsapiens.v86)
-library(BSgenome.Hsapiens.UCSC.hg38)
-library(org.Hs.eg.db)
-library(DropletUtils)
 library(qs)
-library(UpSetR)
-library(gplots)
-library(clusterProfiler)
-library(ReactomePA)
-library(gprofiler2)
-library(DESeq2)
 })
 ```
-
 
 # Read in data: Post Anchor SCT Object
 
@@ -85,13 +36,59 @@ SCT_data_object@meta.data |>
   pivot_wider(names_from = orig.ident, values_from = n)
 ```
 
+```{r create group in metadata}
+ds_samples <- c("ds_tn_67", "ds_tn_6865")
+#hc_samples <- c("hc_65", "hc_69")
+
+SCT_data_object@meta.data <- SCT_data_object@meta.data |> 
+  dplyr::mutate(group = ifelse(orig.ident %in% ds_samples, "ds", "hc"),
+                .after = orig.ident)
+```
+
+Run this chunk if removing ds_tn_6865 is desired.
+
+```{r remove ds_6865}
+Idents(SCT_data_object) <- "orig.ident"
+SCT_data_object <- subset(SCT_data_object, idents = c("hc_65", "hc_69","ds_tn_67"))
+```
+
+# Visualization
+
+```{r cluster subsets}
+Idents(SCT_data_object) <- "predicted.id"
+m1.mac <- subset(SCT_data_object, idents = c("M1 Macrophages"))
+```
 
 
+## Subset visualizations
 
+### M1 Macrophages
 
+```{r }
+VlnPlot(m1.mac,
+        features = "VEGFA",
+        group.by = "orig.ident",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.sample.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
 
-
-
+```{r }
+VlnPlot(m1.mac,
+        features = "VEGFA",
+        group.by = "group",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.condition.png",
+       width = 11,
+       height = 8,
+       units = "in")
+```
 
 
 
