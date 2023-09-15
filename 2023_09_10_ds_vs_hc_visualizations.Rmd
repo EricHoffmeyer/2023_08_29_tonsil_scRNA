@@ -36,6 +36,8 @@ SCT_data_object@meta.data |>
   pivot_wider(names_from = orig.ident, values_from = n)
 ```
 
+Create a column in metadata call group that is either ds (downs) or hc (healthy control AKA NDS)
+
 ```{r create group in metadata}
 ds_samples <- c("ds_tn_67", "ds_tn_6865")
 #hc_samples <- c("hc_65", "hc_69")
@@ -61,24 +63,33 @@ SCT_data_object <- subset(SCT_data_object, idents = c("hc_65", "hc_69","ds_tn_67
 
 ```{r}
 Idents(SCT_data_object) <- "orig.ident"
+
 ds_67 <- subset(SCT_data_object, idents = c("ds_tn_67"))
 ds_tn_6865 <- subset(SCT_data_object, idents = c("ds_tn_6865"))
 hc_65 <- subset(SCT_data_object, idents = c("hc_65"))
 hc_69 <- subset(SCT_data_object, idents = c("hc_69"))
 ```
 
+## Subset DS and NDS (HC) groups
+
+```{r cluster subsets}
+Idents(SCT_data_object) <- "group"
+
+ds_object <- subset(SCT_data_object, idents = c("ds"))
+hc_object <- subset(SCT_data_object, idents = c("hc"))
+```
 
 ## Subset clusters
 
 ```{r cluster subsets}
 Idents(SCT_data_object) <- "predicted.id"
+
 m1.mac <- subset(SCT_data_object, idents = c("M1 Macrophages"))
 ```
 
+# Subset visualizations
 
-## Subset visualizations
-
-### M1 Macrophages: Gene expression amongst clusters of Individual donors
+## M1 Macrophages: Gene expression amongst clusters of Individual donors
 
 ```{r}
 Idents(ds_67) <- "predicted.id"
@@ -87,7 +98,7 @@ Idents(hc_65) <- "predicted.id"
 Idents(hc_69) <- "predicted.id"
 ```
 
-```{r}
+```{r donor violin plots}
 a <- VlnPlot(ds_67,
         features = "VEGFA",
         sort = "increasing") + 
@@ -117,7 +128,7 @@ d <- VlnPlot(hc_69,
         labs(title = "VEGFA, hc_69")
 ```
 
-```{r}
+```{r combine plots and save}
 e <- ggpubr::ggarrange(a, b, c, d,
                     ncol = 2, nrow = 2)
 e
@@ -127,18 +138,18 @@ ggsave(filename = "Analysis_2023_09_10/plots/VEGFA.by.sample.png",
        units = "in")
 ```
 
-### M1 Macrophages: Gene expression amongst clusters of condition
+## M1 Macrophages: Gene expression amongst clusters of condition
 
-```{r cluster subsets}
-Idents(SCT_data_object) <- "group"
-ds_object <- subset(SCT_data_object, idents = c("ds"))
-hc_object <- subset(SCT_data_object, idents = c("hc"))
-```
+Change Idents back to predicted.id instead of group
 
-VEGF violin plots of DS and HC
 ```{r}
 Idents(ds_object) <- "predicted.id"
 Idents(hc_object) <- "predicted.id"
+```
+
+VEGF violin plots of DS and HC (called NDS here, by request)
+
+```{r}
 a <- VlnPlot(ds_object,
         features = "VEGFA",
         sort = "increasing") + 
@@ -188,8 +199,48 @@ ggsave(filename = "Analysis_2023_09_10/plots/KLRC2.by.condition.png",
        units = "in")
 ```
 
+Elena asked for 8 more violin plots comparing gene expression for ds and nds side by side. Here I'll make a function to save time and space.
 
+```{r}
+ds.nds.violin <- function(x, y, z, w){
+  a <- VlnPlot(x,
+        features = z,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = paste0(z, ", DS samples"))
 
+b <- VlnPlot(y,
+        features = z,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = paste0(z, ", NDS samples"))
+
+c <- ggpubr::ggarrange(a, b,
+                    ncol = 2)
+
+ggsave(filename = paste0(w, z, ".by.condition.png"),
+       plot = c,
+       width = 11,
+       height = 8,
+       units = "in")
+}
+```
+
+Here's a vector containing the genes of interest
+
+```{r}
+elena_genes <- c("BAG3", "BCL2L11", "IL6", "IL1B", "FGF1", "FGF2", "FGFR1", "FGFR2")
+```
+
+Now to loop the genes of interest through the funciton
+
+```{r}
+for (i in elena_genes) {
+  ds.nds.violin(ds_object, hc_object, elena_genes, "Analysis_2023_09_10/plots/")
+}
+```
 
 ### M1 Macrophages : Single gene (no clusters) across donors/condition
 
@@ -222,17 +273,8 @@ ggsave(filename = "Analysis_2023_09_10/plots/m1.mac.VEGFA.by.condition.png",
 
 
 
+
+
 ```{r}
-rm(m1.mac)
+sessionInfo()
 ```
-
-
-
-
-
-
-
-
-
-
-

@@ -1,0 +1,166 @@
+---
+title: "Violin plot function/iteration subproject"
+#output: html_notebook
+---
+
+Currently I generate a separate code chunk for every gene expression violin plot Elena and Dallas ask for. The goal of this code is generate a function that can take the necessary inputs and generate the plot. Then to create a loop have it iterate through a vector of gene symbols to generate multiple plots.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(Seurat)
+library(tidyverse)
+library(qs)
+})
+```
+
+# Read in data: Post Anchor SCT Object
+
+```{r read in post anchor seurat}
+SCT_data_object = qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+# Data wrangling and prep
+
+This data object does not have a variable in th metadata that denotes downs syndrome or healthy control. But the naming convention of the samples let us know which is which. I'll create an extra column in the metadata called `group` that specifies ds (for downs) or hc (for healthy control, also called 'NDS' for non-downs syndrome)
+
+```{r create group in metadata}
+ds_samples <- c("ds_tn_67", "ds_tn_6865")
+#hc_samples <- c("hc_65", "hc_69")
+
+SCT_data_object@meta.data <- SCT_data_object@meta.data |> 
+  dplyr::mutate(group = ifelse(orig.ident %in% ds_samples, "ds", "hc"),
+                .after = orig.ident)
+```
+
+Now I will create two subsets of the original object: one for ds and one for hc. Currently, the identities (Idents) of the object are `predicted.id` values, so I have to change it to `group` in order to subset.
+
+```{r cluster subsets}
+Idents(SCT_data_object) <- "group"
+ds_object <- subset(SCT_data_object, idents = c("ds"))
+hc_object <- subset(SCT_data_object, idents = c("hc"))
+```
+
+And now I will change the Idents back to `predicted.id`. This way the violin plots will show gene expression by cluster rather than by `group`.
+
+```{r}
+Idents(ds_object) <- "predicted.id"
+Idents(hc_object) <- "predicted.id"
+```
+
+# Creating the plotting function
+
+Here is an example of the code I want to loop using the gene "BAG3". This code generates two violin plots of gene expression from the ds and hc Seurat objects, combines the plots, and saves it.
+
+```{r}
+a <- VlnPlot(ds_object,
+        features = "BAG3",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "BAG3, DS samples")
+
+b <- VlnPlot(hc_object,
+        features = "BAG3",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "BAG3, NDS samples")
+
+c <- ggpubr::ggarrange(a, b,
+                    ncol = 2)
+
+ggsave(filename = "Analysis_2023_09_10/plots/BAG3.by.condition.png",
+       plot = c,
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+First, let's identify the variables that will change from plot to plot:
+
+Gene name ("BAG3")
+ds_object
+hc object
+gene name in labs title argument
+gene name in ggsave filename argument
+a directory path variable to help organize results
+
+I think I can combine the gene name variables into a single variable that is used multiple times, since it is always input as a character.
+
+I also have some internal variables that don't change. These I can define inside the function but don't need to explicitly state in the function arguments.
+
+plot a
+plot b
+combo plot c
+
+So the function would look something like:
+
+```{r}
+ds.nds.violin <- function(x, y, z, w){
+  a <- VlnPlot(x,
+        features = z,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = paste0(z, ", DS samples"))
+
+b <- VlnPlot(y,
+        features = z,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = paste0(z, ", NDS samples"))
+
+c <- ggpubr::ggarrange(a, b,
+                    ncol = 2)
+
+ggsave(filename = paste0(w, z, ".by.condition.png"),
+       plot = c,
+       width = 11,
+       height = 8,
+       units = "in")
+}
+```
+
+Where x = ds_object,
+      y = hc_object,
+      z = vector of gene symbols to test
+      w = directory name for plots
+
+Let's test the function by using a vector with a single variable for z.
+
+```{r}
+z <- "BAG3"
+```
+
+```{r}
+ds.nds.violin(ds_object, hc_object, z, "Analysis_2023_09_10/temp/")
+```
+
+This worked first time! Small miracles.
+
+Now for the loop. Let's start with the simplest version: 2 values.
+
+```{r}
+z <- c("BAG3", "BCL2L11")
+```
+
+Now for the loop:
+
+```{r}
+for (i in z) {
+  ds.nds.violin(ds_object, hc_object, i, "Analysis_2023_09_10/temp/")
+}
+```
+
+We now have a working function to save me time in the future!
+
+```{r}
+sessionInfo()
+```
