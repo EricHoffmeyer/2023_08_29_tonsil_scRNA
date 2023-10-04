@@ -1,0 +1,982 @@
+---
+title: "2023_10_03_additional_sample"
+author: "Eric Hoffmeyer"
+date: "2023-10-04"
+#output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import Libraries
+
+```{r dir folders}
+folder.name <- "Analysis_2023_10_03"
+
+if(!exists(folder.name)){
+  dir.create(folder.name)
+}
+
+script.date <- "2023_10_03"
+```
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(AnnotationHub)
+library(AnnotationFilter)
+library(AnnotationDbi)
+library(slingshot)
+library(zellkonverter)
+library(BiocManager)
+library(remotes)
+library(devtools)
+library(R.utils)
+library(SeuratWrappers)
+library(harmony)
+library(ggpubr)
+library(gridExtra)
+library(rlist)
+library(tictoc)
+library(biomaRt)
+library(rio)
+library(readxl)
+library(tradeSeq)
+library(pheatmap)
+library(clustree)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(tidyseurat)
+library(dittoSeq)
+library(SingleR)
+library(celldex)
+library(SeuratData)
+library(skimr)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(BSgenome.Hsapiens.UCSC.hg38)
+library(org.Hs.eg.db)
+library(DropletUtils)
+library(qs)
+library(UpSetR)
+library(gplots)
+library(clusterProfiler)
+library(ReactomePA)
+library(gprofiler2)
+library(DESeq2)
+})
+```
+
+Import and Merge
+================
+
+```{r scRNA data}
+HC_69 <- Read10X_h5(filename = "data/raw_data/HC_69/filtered_feature_bc_matrix.h5")
+HC_65 <- Read10X_h5(filename =  "data/raw_data/HC_65/filtered_feature_bc_matrix.h5")
+DS_TN_67 <- Read10X_h5(filename = "data/raw_data/DS_TN_67/filtered_feature_bc_matrix.h5")
+DS_TN_6865 <- Read10X_h5(filename = "data/raw_data/DS_TN_6865/filtered_feature_bc_matrix.h5")
+```
+
+Create Seurat Object
+---------------------
+
+```{r create seurats}
+HC_69_Obj <- CreateSeuratObject(counts = HC_69, project = "hc_69")
+HC_65_Obj <- CreateSeuratObject(counts = HC_65, project = "hc_65")
+DS_TN_67_Obj <- CreateSeuratObject(counts = DS_TN_67, project = "ds_tn_67")
+DS_TN_6865_Obj <- CreateSeuratObject(counts = DS_TN_6865, project = "ds_tn_6865")
+```
+
+Merge
+-------
+
+```{r merge seurats}
+merged_data_object <- merge(x = HC_69_Obj,
+                           y = c(HC_65_Obj,
+                                 DS_TN_67_Obj,
+                                 DS_TN_6865_Obj),
+                           add.cell.id = c("hs_69",
+                                           "hc_65",
+                                           "ds_tn_67",
+                                           "ds_tn_6865"))
+```
+
+```{r view merged seurat}
+merged_data_object
+```
+
+Add Metadata
+------------
+```{r view metadata}
+merged_data_object@meta.data
+```
+
+```{r add log10}
+merged_data_object$log10GenePerUMI <- log10(merged_data_object$nFeature_RNA) / log10(merged_data_object$nCount_RNA)
+```
+
+Mitochondria Ratio
+-----------
+
+```{r}
+merged_data_object$mitoPct <- PercentageFeatureSet(merged_data_object, pattern = "^MT-")
+merged_data_object$mitoRatio <- merged_data_object@meta.data$mitoPct / 100
+```
+
+```{r view metadata}
+merged_data_object@meta.data
+```
+
+Visualization
+==============
+
+The number of cell counts per sample
+------------------------------------
+
+```{r plot counts/sample}
+merged_data_object |> 
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
+  geom_bar() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
+```
+
+## The number UMIs/transcripts per cell
+
+The UMI counts per cell should generally be above 500, that is the low end of what we expect. If UMI counts are between 500-1000 counts, it is usable but the cells probably should have been sequenced more deeply.
+
+```{r plot umis/transcript}
+merged_data_object |>
+  ggplot(aes(color = , x = nCount_RNA, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  scale_x_log10() +
+  theme_classic() +
+  labs(x = "UMI",
+       y = "Cell density") +
+  # ylab("Cell density") +
+  geom_vline(xintercept = 500) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 500, label = "500", y = 0.77), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size = 11))
+```
+
+## The number of genes detected per cell
+
+Visualize the distribution of genes detected per cell via histogram
+
+On average, most cells should have at least 200 genes detected (see vertical line)
+
+```{r plot genes/cell}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = nFeature_RNA, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  theme_classic() +
+  scale_x_log10() +
+  geom_vline(xintercept = 200) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 200, label = "500", y = 1.0), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size=11))
+```
+
+## The distribution of genes detected per cell via boxplot
+
+```{r plot genes/cell boxplot}
+merged_data_object |>
+  ggplot(aes(x = orig.ident, y = log10(nFeature_RNA), fill = orig.ident)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells vs Number of Genes Raw/Pre-Filtered")
+```
+
+## Joint Filtering of UMIs vs genes detected
+
+Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
+Definitely want to remove cells in the lower left hand quadrant
+
+```{r join/filter umis vs genes}
+#This will take a long long time ...
+merged_data_object |>
+  ggplot(aes(x = nCount_RNA, y = nFeature_RNA, color = mitoRatio)) +
+  geom_point() +
+  scale_colour_gradient(low = "gray90", high = "black") +
+  stat_smooth(method = lm) +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme_classic() +
+  geom_vline(xintercept = 500) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 500, label = "500", y = 10000), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text = element_text(size = 11)) +
+  geom_hline(yintercept = 250) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 10000, label = "250", y = 250), 
+            colour = "black", angle = 0, vjust = 1.2, 
+            text=element_text(size = 11)) +
+  facet_wrap(~orig.ident)
+```
+
+## Mitochondrial counts ratio
+
+Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r plot mito ratio}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = mitoRatio, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  scale_x_log10() +
+  theme_classic() +
+  geom_vline(xintercept = 0.40) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 0.4, label = "40%", y = 0.77), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text = element_text(size = 11))
+```
+
+## Complexity plot
+
+Complexity - We can see the samples where we sequenced each cell less have a higher overall complexity, that is because we have not started saturating the sequencing for any given gene for these samples. Outlier cells in these samples might be cells that have a less complex RNA species than other cells. Sometimes we can detect contamination with low complexity cell types like red blood cells via this metric. Generally, we expect the novelty score to be above 0.80.
+
+Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+
+```{r complexity plot}
+merged_data_object |>
+  ggplot(aes(x = log10GenePerUMI, color = orig.ident, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  theme_classic() +
+  labs(x = "log10GenesPerUMI (Complexity)") +
+  geom_vline(xintercept = 0.8) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 0.8, label="80%", y = 11), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text=element_text(size = 11))
+```
+
+## Violin Plot
+
+Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
+
+```{r vln mito data}
+VlnPlot(merged_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```
+
+Cell Level Filter
+=================
+
+```{r filter rna count and mito}
+filtered_data_object <- merged_data_object |>
+  filter(nFeature_RNA >= 200 &
+           nCount_RNA >= 500 &
+           mitoPct < 20)
+```
+
+Gene Level Filter
+=================
+
+### Extract counts
+
+```{r get counts}
+counts <- GetAssayData(filtered_data_object, slot = "counts")
+```
+
+Output a logical matrix specifying for each gene on whether or not there are more than zero counts per cell
+
+```{r}
+nonzero <- counts > 0
+```
+
+### Keep Gene > 10 cells
+
+Now, we will perform some filtering by prevalence. If a gene is only expressed in a handful of cells, it is not particularly meaningful as it still brings down the averages for all other cells it is not expressed in. For our data we choose to keep only genes which are expressed in 10 or more cells. By using this filter, genes which have zero counts in all cells will effectively be removed.
+
+Sums all TRUE values and returns TRUE if more than 10 TRUE values per gene
+
+```{r filter low genes out}
+keep_genes <- Matrix::rowSums(nonzero) >= 10
+```
+
+```{r}
+filtered_counts <- counts[keep_genes, ]
+```
+
+```{r}
+filtered_data_object <- CreateSeuratObject(filtered_counts, meta.data = filtered_data_object@meta.data)
+```
+
+```{r}
+filtered_data_object@meta.data |> 
+  dplyr::count(orig.ident)
+```
+
+Post Visualization
+==================
+
+The number of cell counts per sample
+------------------------------------
+
+```{r plot cells/sample}
+filtered_data_object |>
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
+  geom_bar() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
+```
+
+## Violin Plot
+
+Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
+
+```{r vln counts and mito}
+VlnPlot(filtered_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```
+
+SCTransform Normalization
+=========================
+
+## Rise Memory
+
+Before we run this for loop, we know that the output can generate large R objects/variables in terms of memory. If we have a large dataset, then we might need to adjust the limit for allowable object sizes within R (Default is 500 * 1024 ^ 2 = 500 Mb) using the following code:
+
+```{r increase memory}
+options(future.globals.maxSize = 14000 * 1024^2) ## 14 GB (I think ...)
+```
+
+```{r view SCTransform}
+SCT_data_object <- filtered_data_object |>
+  SCTransform(.)
+```
+
+SAVE POINT
+==========
+
+```{r save merged seurat}
+#saveRDS(SCT_data_object, file = "data/TidySeuratify_SCT_data_object.rds")
+```
+
+```{r load merged seurat}
+SCT_data_object <- readRDS(file = "data/TidySeuratify_SCT_data_object.rds")
+```
+
+```{r view seurat}
+SCT_data_object
+```
+
+PC Selection (FindVar → Scale → PCA → UMAP→ )
+=============================================
+
+```{r}
+set.seed(123)
+SCT_data_object <- SCT_data_object |>
+  FindVariableFeatures(.,
+                       selection.method = "vsn",
+                       nfeatures = 2000,
+                       verbose = F) |>
+  ScaleData(.) |>
+  RunPCA(.)
+```
+
+```{r}
+pct <- SCT_data_object[["pca"]]@stdev / sum(SCT_data_object[["pca"]]@stdev) * 100
+# pct
+cumu <- cumsum(pct)
+# cumu
+co1 <- which(cumu > 90 & pct < 5)[1]
+co1
+```
+
+```{r}
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+co2
+```
+
+```{r}
+pcs <- min(co1, co2)
+pcs
+```
+
+```{r}
+plot_df <- data.frame(pct = pct,
+                      cumu = cumu,
+                      rank = 1:length(pct))
+
+plot_df
+
+ggplot(plot_df, aes(cumu, pct, label = rank, color = rank > pcs)) +
+  geom_text() +
+  # geom_vline(xintercept = 75, color = "grey") +
+  # geom_hline(yintercept = min(pct[pct > 5]), color = "grey") +
+  theme_bw()
+```
+
+Clustering (FindNeighbors → FindClusters )
+========================================
+
+```{r}
+# DefaultAssay(SCT_data_object) = "RNA" ?? Not sure this is true ... maybe I still use SCTransformed values to "Find Cluster" ... 
+SCT_data_object <- SCT_data_object |>
+  FindNeighbors(., dims = 1:pcs, verbose = F) |>
+  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |>
+  # FindClusters(., method = "igraph", verbose = F) |>
+  RunUMAP(.,
+          dims = 1:40,
+          reduction = "pca",
+          n.components = 3L)
+```
+
+Tally Clusters
+--------------
+
+```{r}
+SCT_data_object@meta.data
+```
+
+```{r}
+SCT_data_object |>
+  as_tibble() |>
+  select_at(vars(contains("SCT_snn_res"))) |>
+  pivot_longer(cols = 1:5,
+               names_to = "Resolution",
+               values_to = "cluster") |>
+  mutate(cluster = as.numeric(cluster)) |>
+  group_by(Resolution) |>
+  summarise(mean = mean(cluster, rm.na = T),
+            max = max(cluster))
+```
+
+```{r}
+# Idents(SCT_data_object) <- "SCT_snn_res.0.3" # name is picked from column name of resolutions
+dittoDimPlot(SCT_data_object,
+             var = "SCT_snn_res.0.05",
+             size = 0.2,
+             legend.show = FALSE,
+             do.label = TRUE,
+             labels.size = 2,
+             labels.highlight = TRUE,
+             do.ellipse = FALSE,
+             do.letter = FALSE,
+             opacity = 0.5,
+             do.contour = FALSE,
+             main = "Verneris Down Syndrome",
+             sub = "created: Tzu L. Phang",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1")
+```
+
+```{r}
+cluster5.markers <- FindMarkers(SCT_data_object, ident.1 = 5, min.pct = 0.25)
+```
+
+SAVE POINT postClustering (5/15/2023)
+======================
+
+Object before going into cell labeling
+
+```{r save post cluster seurat}
+#saveRDS(SCT_data_object, file = "data/2023_08_29_SCT_data_object_postClustering.rds")
+```
+
+```{r load post cluster seurat}
+#SCT_data_object <- readRDS(file = "data/2023_08_29_SCT_data_object_postClustering.rds")
+```
+
+```{r view metadata}
+SCT_data_object@meta.data
+```
+
+HCATonsilData
+==============
+
+Collect individual Tonsil single cell (labeled) dataset and combine them for "anchoring" purposes:
+
+PDC
+-------
+
+```{r read pdc data}
+HCATonsil.PDC <- readRDS("data/hca_data/20220215_PDC_seurat_obj.rds")
+```
+
+```{r view pdc counts}
+HCATonsil.PDC@meta.data |> 
+  dplyr::count(annotation_20220215)
+```
+
+myeloid
+----------
+
+```{r read myeloid data}
+HCATonsil.myeloid <- readRDS("data/hca_data/20220215_myeloid_seurat_obj.rds")
+```
+
+```{r view myeloid counts}
+HCATonsil.myeloid@meta.data |> 
+  dplyr::count(annotation_20220215) 
+```
+
+ILC NK
+---------
+
+```{r read ilc/nk data}
+HCATonsil.ILC.NK <- readRDS("data/hca_data/20220215_ILC_NK_seurat_obj.rds")
+```
+
+```{r view ilc/nk counts}
+HCATonsil.ILC.NK@meta.data |> 
+  dplyr::count(annotation_20220215) 
+```
+
+PC
+-------
+
+```{r read pc data}
+HCATonsil.PC <- readRDS("data/hca_data/20220215_PC_seurat_obj.rds")
+```
+
+```{r view pc counts}
+HCATonsil.PC |> 
+  dplyr::count(annotation_20220215)
+```
+
+Combined
+---------
+
+```{r merge pdc, myeloid, ilc/nk, pc}
+HCATonsil.combined <- merge(x = HCATonsil.PDC, 
+                           y = c(HCATonsil.myeloid, HCATonsil.ILC.NK, HCATonsil.PC),
+                           add.cell.id = c("PDC", "myeloid", "ILC_NK", "PC"))
+```
+
+```{r view merged counts}
+HCATonsil.combined@meta.data |> 
+  dplyr::count(annotation_20220215)
+```
+
+### Recluster
+
+```{r recluster}
+set.seed(123)
+HCATonsil.combined <- HCATonsil.combined  |>  
+  NormalizeData(.) |> 
+  FindVariableFeatures(.,
+                       # selection.method = "vsn",
+                       nfeatures = 2000,
+                       verbose = T) |> 
+  ScaleData(.) |> 
+  RunPCA(.) |> 
+  FindNeighbors(., dims = 1:50, verbose = F) |> 
+  FindClusters(., resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |> 
+  RunUMAP(.,
+          dims = 1:40,
+          reduction = "pca")
+```
+
+```{r view metadata}
+HCATonsil.combined@meta.data
+```
+
+```{r}
+dittoDimPlot(HCATonsil.combined,
+             # var = "RNA_snn_res.0.4",
+             var = "annotation_20220215",
+             size = 0.2,
+             legend.show = FALSE,
+             do.label = TRUE,
+             labels.size = 2,
+             labels.highlight = TRUE,
+             do.ellipse = FALSE,
+             do.letter = FALSE,
+             opacity = 0.5,
+             do.contour = FALSE,
+             main = "Verneris Down Syndrome",
+             sub = "created: Tzu L. Phang",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1")
+```
+
+FindAnchor
+==========
+
+```{r}
+intersect.feature <- intersect(rownames(SCT_data_object), rownames(HCATonsil.combined))
+```
+
+```{r}
+DefaultAssay(SCT_data_object) <- "RNA"
+
+# transfer cell type labels from reference to query
+transfer_anchors <- FindTransferAnchors(reference = HCATonsil.combined,
+                                        query = SCT_data_object,
+                                        features = intersect.feature,
+                                        # normalization.method = "",
+                                        reference.reduction = "pca",
+                                        recompute.residuals = T,
+                                        dims = 1:50)
+
+predictions <- TransferData(anchorset = transfer_anchors, 
+                            refdata = HCATonsil.combined$annotation_20220215,
+                            weight.reduction = SCT_data_object[['pca']], ## using query data
+                            dims = 1:50)
+
+SCT_data_object <- AddMetaData(object = SCT_data_object,
+                               metadata = predictions)
+```
+
+```{r}
+SCT_data_object@meta.data |> 
+  dplyr::count(predicted.id)
+```
+
+## SAVE: Post Anchor SCT Object
+
+```{r save anchored seurat}
+#qsave(SCT_data_object, "data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+```{r load anchored seurat}
+SCT_data_object <- qread("data/SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+# dittoDimPlot
+
+## Plot All
+
+```{r max ggrepel points}
+options(ggrepel.max.overlaps = Inf)
+```
+
+```{r UMAP}
+dittoDimPlot(SCT_data_object,
+             var = "predicted.id",
+             # do.hover = T,
+             do.label = T,
+             labels.size = 2,
+             labels.highlight = T,
+             legend.show = F,
+             opacity = 0.9,
+             reduction.use = "umap",
+             main = "Verneris/Dallas Down Syndrome",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1") 
+ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_", script.date, ".pdf"))
+```
+
+```{r view orig.idents}
+SCT_data_object@meta.data |> 
+  dplyr::count(orig.ident)
+```
+
+Umap: hc_65
+----------
+
+```{r subset hc65}
+Idents(SCT_data_object) = "orig.ident"
+hc_65_seurat = subset(SCT_data_object, idents = "hc_65")
+```
+
+```{r UMAP hc65}
+dittoDimPlot(hc_65_seurat,
+             var = "predicted.id",
+             # do.hover = T,
+             do.label = T,
+             labels.size = 2,
+             labels.highlight = T,
+             legend.show = F,
+             opacity = 0.3,
+             reduction.use = "umap",
+             main = "Verneris/Dallas Down Syndrome: ds_65",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1") 
+ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_hc_65_", script.date, ".pdf"))
+```
+
+Umap: ds_tn_67
+--------------
+
+```{r subset ds67}
+Idents(SCT_data_object) = "orig.ident"
+ds_tn_67_seurat = subset(SCT_data_object, idents = "ds_tn_67")
+```
+
+```{r UMAP ds67}
+dittoDimPlot(ds_tn_67_seurat,
+             var = "predicted.id",
+             # do.hover = T,
+             do.label = T,
+             labels.size = 2,
+             labels.highlight = T,
+             legend.show = F,
+             opacity = 0.3,
+             reduction.use = "umap",
+             main = "Verneris/Dallas Down Syndrome: ds_tn_67",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1") 
+ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_ds_tn_67_", script.date, ".pdf"))
+```
+
+Umap: hc_69
+--------------
+
+```{r subset hc69}
+Idents(SCT_data_object) = "orig.ident"
+hc_69_seurat = subset(SCT_data_object, idents = "hc_69")
+```
+
+```{r UMAP hc69}
+dittoDimPlot(hc_69_seurat,
+             var = "predicted.id",
+             # do.hover = T,
+             do.label = T,
+             labels.size = 2,
+             labels.highlight = T,
+             legend.show = F,
+             opacity = 0.3,
+             reduction.use = "umap",
+             main = "Verneris/Dallas Down Syndrome: hc_69",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1") 
+ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_hc_69_", script.date, ".pdf"))
+```
+
+Umap: ds_tn_6865
+--------------
+
+```{r subset ds6865}
+Idents(SCT_data_object) = "orig.ident"
+ds_tn_6865_seurat = subset(SCT_data_object, idents = "ds_tn_6865")
+```
+
+```{r UMAP ds6865}
+dittoDimPlot(ds_tn_6865_seurat,
+             var = "predicted.id",
+             # do.hover = T,
+             do.label = T,
+             labels.size = 2,
+             labels.highlight = T,
+             legend.show = F,
+             opacity = 0.3,
+             reduction.use = "umap",
+             main = "Verneris/Dallas Down Syndrome: hc_69",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1") 
+ggsave(filename = paste0(folder.name, "/plots/Verneris_V2_Dallas_HCATonsil_Anchor_ds_tn_6865_", script.date, ".pdf"))
+```
+
+# Visualizations
+
+## Violin Plots
+
+### VEGF
+
+```{r vln vegfa}
+#ncam_top_10 <- c("CD16-CD56- NK", "PB", "CD16+CD56- NK", "NKp44+ ILC3", "DC1 mature", "DC5", "aDC1", "DC2", "class switch MBC")
+  
+VlnPlot(SCT_data_object,
+        features = "VEGFA",
+        #idents = ncam_top_10,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/VEGF_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+
+### COL genes
+
+```{r vln col1a1}
+VlnPlot(SCT_data_object,
+        features = "COL1A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL1A1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a1}
+VlnPlot(SCT_data_object,
+        features = "COL6A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a2}
+VlnPlot(SCT_data_object,
+        features = "COL6A2",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A2_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col6a3}
+VlnPlot(SCT_data_object,
+        features = "COL6A3",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL6A3_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln col4a1}
+VlnPlot(SCT_data_object,
+        features = "COL4A1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/COL4A1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+### Other genes Elena asked for
+
+```{r vln il1b}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/IL1B_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+```{r vln tgfb1}
+VlnPlot(SCT_data_object,
+        features = "TGFB1",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+
+ggsave(filename = "Analysis_2023_08_29/plots/TGFB1_violin_plot.pdf",
+       width = 11,
+       height = 8,
+       units = "in")
+```
+
+### Other genes of interest
+
+```{r vln cxcl8}
+VlnPlot(SCT_data_object,
+        features = "CXCL8",
+        #idents = ncam_top_10,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+```
+
+```{r vln igll5}
+VlnPlot(SCT_data_object,
+        features = "IGLL5",
+        #idents = ncam_top_10,
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size=8))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Individual cluster markers; does gene DE comparing cluster to all other cells.
+
+```{r FindMarkers, all clusters}
+cluster.markers <- FindAllMarkers(SCT_data_object, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+cluster.markers |>
+    group_by(predicted.id) |>
+    slice_max(n = 2, order_by = avg_log2FC)
+```
+
+```{r save cluster marker info}
+saveRDS(cluster.markers, file = paste0(folder.name, "cluster_markers_", script.date, ".rds"))
+```
+
+```{r heatmap plot}
+SCT_data_object |>
+    group_by(predicted.id) |>
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(pbmc, 
+          features = top10$gene,
+          idents = ncam_top_10) + 
+  NoLegend()
+```
+
+
+
+
+
+
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
