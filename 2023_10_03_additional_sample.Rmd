@@ -85,6 +85,7 @@ HC_69 <- Read10X_h5(filename = "data/raw_data/HC_69/filtered_feature_bc_matrix.h
 HC_65 <- Read10X_h5(filename =  "data/raw_data/HC_65/filtered_feature_bc_matrix.h5")
 DS_TN_67 <- Read10X_h5(filename = "data/raw_data/DS_TN_67/filtered_feature_bc_matrix.h5")
 DS_TN_6865 <- Read10X_h5(filename = "data/raw_data/DS_TN_6865/filtered_feature_bc_matrix.h5")
+DS_TN_75 <- Read10X_h5(filename = "data/raw_data/DS_TN_75/filtered_feature_bc_matrix.h5")
 ```
 
 Create Seurat Object
@@ -95,6 +96,7 @@ HC_69_Obj <- CreateSeuratObject(counts = HC_69, project = "hc_69")
 HC_65_Obj <- CreateSeuratObject(counts = HC_65, project = "hc_65")
 DS_TN_67_Obj <- CreateSeuratObject(counts = DS_TN_67, project = "ds_tn_67")
 DS_TN_6865_Obj <- CreateSeuratObject(counts = DS_TN_6865, project = "ds_tn_6865")
+DS_TN_75_Obj <- CreateSeuratObject(counts = DS_TN_75, project = "ds_tn_75")
 ```
 
 Merge
@@ -104,11 +106,13 @@ Merge
 merged_data_object <- merge(x = HC_69_Obj,
                            y = c(HC_65_Obj,
                                  DS_TN_67_Obj,
-                                 DS_TN_6865_Obj),
+                                 DS_TN_6865_Obj,
+                                 DS_TN_75_Obj),
                            add.cell.id = c("hs_69",
                                            "hc_65",
                                            "ds_tn_67",
-                                           "ds_tn_6865"))
+                                           "ds_tn_6865",
+                                           "ds_tn_75"))
 ```
 
 ```{r view merged seurat}
@@ -355,14 +359,14 @@ options(future.globals.maxSize = 14000 * 1024^2) ## 14 GB (I think ...)
 
 ```{r view SCTransform}
 SCT_data_object <- filtered_data_object |>
-  SCTransform(.)
+  SCTransform()
 ```
 
 SAVE POINT
 ==========
 
 ```{r save merged seurat}
-#saveRDS(SCT_data_object, file = "data/TidySeuratify_SCT_data_object.rds")
+saveRDS(SCT_data_object, file = "data/TidySeuratify_SCT_data_object.rds")
 ```
 
 ```{r load merged seurat}
