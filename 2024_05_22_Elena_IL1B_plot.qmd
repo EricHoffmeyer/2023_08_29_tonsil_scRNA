@@ -1,0 +1,243 @@
+---
+title: "2024_05_22_Elena_IL1B_plot"
+format: html
+editor: source
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(Seurat)
+library(tidyverse)
+library(qs)
+})
+```
+
+```{r}
+results.dir <- "Analysis_2024_05_22/"
+```
+
+
+# Read in data: Post Anchor SCT Object
+
+```{r read in post anchor seurat}
+SCT_data_object = qread("data/2023_08_29_SCT_data_object_Post_Anchored.qs", nthreads = 10)
+```
+
+
+```{r}
+ds_samples <- c("ds_tn_67", "ds_tn_6865")
+#hc_samples <- c("hc_65", "hc_69")
+
+SCT_data_object@meta.data <- SCT_data_object@meta.data |> 
+  dplyr::mutate(group = ifelse(orig.ident %in% ds_samples, "DS", "NDS"),
+                .after = orig.ident)
+```
+
+# Subset data
+
+```{r}
+# Switch Idents to group
+# Idents(SCT_data_object) <- "group"
+
+# ds_object <- subset(SCT_data_object, idents = c("ds"))
+# hc_object <- subset(SCT_data_object, idents = c("hc"))
+
+# return Idents to predicted.id
+# Idents(ds_object) <- "predicted.id"
+# Idents(hc_object) <- "predicted.id"
+```
+
+# Plot Data
+## Original plots
+
+```{r}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8))
+```
+
+```{r}
+VlnPlot(hc_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "IL1B, NDS samples")
+```
+
+# How to fix "Low Resolution" problem
+
+## Increase DPI
+
+```{r}
+VlnPlot(hc_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing") + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "IL1B, NDS samples")
+
+ggsave(filename = paste0(results.dir,"IL1B.NDS.300.png"),
+       width = 11,
+       height = 8,
+       units = "in",
+       dpi = 300)
+
+ggsave(filename = paste0(results.dir,"IL1B.NDS.600.png"),
+       width = 11,
+       height = 8,
+       units = "in",
+       dpi = 600)
+```
+
+## Cut down on number of predicted.ids
+
+```{r}
+hc_object@meta.data |> 
+  group_by(predicted.id) |> 
+  summarise(count = n())|> 
+  pull(predicted.id)
+```
+
+```{r}
+shorter.vector <- c("M1 Macrophages", "Neutrophil Granulocytes", "DC4", "C1Q HLA macrophages", "DC2", "Monocytes")
+```
+
+Make sure that the Idents() of your single cell object is on whatever metadata column you are creating a subset vector from!!!
+
+```{r}
+VlnPlot(hc_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing",
+        idents = shorter.vector) + 
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 8)) +
+        labs(title = "IL1B, NDS samples")
+
+# ggsave(filename = paste0(results.dir,"IL1B.shorter.600.png"),
+#        width = 11,
+#        height = 8,
+#        units = "in",
+#        dpi = 600)
+```
+
+## Split plot
+
+```{r}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing",
+        split.by = "group") + 
+  theme(axis.text = element_text(size = 8))
+
+# ggsave(filename = paste0(results.dir,"IL1B.split.600.png"),
+#        width = 11,
+#        height = 8,
+#        units = "in",
+#        dpi = 600)
+```
+
+## 2024_05_24 Update
+
+Showed Elena the previous plots and we are moving forward with a grouped plot consisting of only the myeloid subsets.
+
+```{r}
+rm(ds_object, hc_object, il1b.sub)
+```
+
+She wants the following groups: M1, Neut-Gran, C1Q MAC, Monocytes, IL7R Macs, ITGAX ZEBS Macs.
+
+```{r}
+SCT_data_object@meta.data |> 
+  group_by(predicted.id) |> 
+  summarise(count = n()) |> 
+  pull(predicted.id)
+```
+
+```{r}
+myeloid.vector <- c("M1 Macrophages", "Neutrophil Granulocytes", "C1Q HLA macrophages", "Monocytes", "IL7R MMP12 macrophages", "ITGAX ZEB2 macrophages" )
+
+# Earlier changed SCT_data_object Idents() to group, need to change it back to plot properly.
+Idents(SCT_data_object) <- "predicted.id"
+```
+
+```{r}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing",
+        split.by = "group",
+        idents = myeloid.vector) + 
+  theme(axis.text = element_text(size = 8))
+```
+
+This is the plot we want. Need to clean it up a bit more and change the order of display if we can.
+
+
+```{r}
+class(SCT_data_object@meta.data$group)
+```
+
+```{r}
+# change order of DS/NDS on plots
+SCT_data_object@meta.data$group <- as.factor(SCT_data_object@meta.data$group)
+
+levels(SCT_data_object@meta.data$group)
+
+```
+
+```{r}
+SCT_data_object@meta.data$group <- relevel(SCT_data_object@meta.data$group, ref = "NDS")
+```
+
+```{r}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing",
+        split.by = "group",
+        idents = myeloid.vector) + 
+  theme(axis.text = element_text(size = 8))
+```
+
+Okay we have swapped them, but the colors swapped too. 
+
+```{r}
+VlnPlot(SCT_data_object,
+        features = "IL1B",
+        group.by = "predicted.id",
+        sort = "increasing",
+        split.by = "group",
+        idents = myeloid.vector,
+        cols = c("blue", "red")) + 
+  theme(axis.text = element_text(size = 7))
+```
+
+```{r}
+ggsave(filename = paste0(results.dir,"IL1B.grouped.900dpi.png"),
+       width = 11,
+       height = 8,
+       units = "in",
+       dpi = 900)
+```
+
+
+
+
+
+
+
+
