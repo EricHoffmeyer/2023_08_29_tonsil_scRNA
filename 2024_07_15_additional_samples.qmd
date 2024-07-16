@@ -1,0 +1,597 @@
+---
+title: "2024_07_15_additional_samples"
+format: html
+editor: source
+---
+
+Two more single cell RNAseq samples have been processed. For now, Dallas is mainly interested in mapping them to our tonsil datasets and getting the cell counts.
+
+I will map the new samples and save them as .Rdata objects for later analyses where we will likely want to combine them all into a single Seurat object.
+
+# Directores
+
+```{r dir folders}
+result.dir <- "Analysis_2024_07_15/"
+
+if(!exists(result.dir)){
+  dir.create(result.dir)
+}
+
+```
+
+# Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(Seurat)
+library(tidyverse)
+library(qs)
+library(ggplot2)
+library(tidyseurat)
+library(dittoSeq)
+})
+```
+
+# Read in data
+
+```{r}
+DS_75_GEX <- Read10X_h5(filename = "data/raw_data/DS_TN_75_GEX/filtered_feature_bc_matrix.h5")
+DS_83 <- Read10X_h5(filename =  "data/raw_data/DS_TN_83/filtered_feature_bc_matrix.h5")
+```
+
+# Create and merge Seurat objects
+
+```{r}
+DS_75_GEX_obj <- CreateSeuratObject(counts = DS_75_GEX, project = "DS_75_GEX")
+DS_83_obj <- CreateSeuratObject(counts = DS_83, project = "DS_83")
+```
+
+Merge
+
+```{r}
+merged_data_object <- merge(x = DS_75_GEX_obj,
+                           y = DS_83_obj,
+                           add.cell.id = c("ds_75_gex",
+                                           "ds_83"))
+```
+
+```{r}
+merged_data_object
+```
+
+## Add Metadata
+
+```{r}
+merged_data_object@meta.data
+```
+Adding log10 gene per UMI column.
+
+```{r}
+merged_data_object$log10GenePerUMI <- log10(merged_data_object$nFeature_RNA) / log10(merged_data_object$nCount_RNA)
+```
+
+## Mitochondria Ratio
+
+```{r}
+merged_data_object$mitoPct <- PercentageFeatureSet(merged_data_object, pattern = "^MT-")
+merged_data_object$mitoRatio <- merged_data_object@meta.data$mitoPct / 100
+```
+
+```{r}
+merged_data_object@meta.data
+```
+# Visualization
+
+## Cell counts per sample
+
+```{r}
+merged_data_object |> 
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
+  geom_bar() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
+```
+
+## The number UMIs/transcripts per cell
+
+The UMI counts per cell should generally be above 500, that is the low end of what we expect. If UMI counts are between 500-1000 counts, it is usable but the cells probably should have been sequenced more deeply.
+
+```{r}
+merged_data_object |>
+  ggplot(aes(color = , x = nCount_RNA, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  scale_x_log10() +
+  theme_classic() +
+  labs(x = "UMI",
+       y = "Cell density") +
+  # ylab("Cell density") +
+  geom_vline(xintercept = 500) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 500, label = "500", y = 0.77), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size = 11))
+```
+
+## The number of genes detected per cell
+
+Visualize the distribution of genes detected per cell via histogram
+
+On average, most cells should have at least 200 genes detected (see vertical line)
+
+```{r}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = nFeature_RNA, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  theme_classic() +
+  scale_x_log10() +
+  geom_vline(xintercept = 200) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 200, label = "200", y = 1.0), 
+            colour = "black", angle = 90, vjust=1.2, 
+            text=element_text(size=11))
+```
+
+## The distribution of genes detected per cell via boxplot
+
+```{r}
+merged_data_object |>
+  ggplot(aes(x = orig.ident, y = log10(nFeature_RNA), fill = orig.ident)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells vs Number of Genes Raw/Pre-Filtered")
+```
+
+## Mitochondrial counts ratio
+
+Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r}
+merged_data_object |>
+  ggplot(aes(color = orig.ident, x = mitoRatio, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  scale_x_log10() +
+  theme_classic() +
+  geom_vline(xintercept = 0.40) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 0.4, label = "40%", y = 0.77), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text = element_text(size = 11))
+```
+
+## Complexity plot
+
+Complexity - We can see the samples where we sequenced each cell less have a higher overall complexity, that is because we have not started saturating the sequencing for any given gene for these samples. Outlier cells in these samples might be cells that have a less complex RNA species than other cells. Sometimes we can detect contamination with low complexity cell types like red blood cells via this metric. Generally, we expect the novelty score to be above 0.80.
+
+Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+
+```{r}
+merged_data_object |>
+  ggplot(aes(x = log10GenePerUMI, color = orig.ident, fill = orig.ident)) +
+  geom_density(alpha = 0.2) +
+  theme_classic() +
+  labs(x = "log10GenesPerUMI (Complexity)") +
+  geom_vline(xintercept = 0.8) + # note xintercept is just to help visualize what cutoffs you might want to use, change based on cutoff you want/see
+  geom_text(aes(x = 0.8, label="80%", y = 11), 
+            colour = "black", angle = 90, vjust = 1.2, 
+            text=element_text(size = 11))
+```
+
+## Violin Plot
+
+Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
+
+```{r}
+VlnPlot(merged_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```
+
+# Cell Level Filter
+
+```{r}
+filtered_data_object <- merged_data_object |>
+  filter(nFeature_RNA >= 200 &
+           nCount_RNA >= 500 &
+           mitoPct < 20)
+```
+
+# Gene Level Filter
+
+### Extract counts
+
+```{r}
+counts <- GetAssayData(filtered_data_object, slot = "counts")
+```
+
+Output a logical matrix specifying for each gene on whether or not there are more than zero counts per cell
+
+```{r}
+nonzero <- counts > 0
+```
+
+### Keep Gene > 10 cells
+
+Now, we will perform some filtering by prevalence. If a gene is only expressed in a handful of cells, it is not particularly meaningful as it still brings down the averages for all other cells it is not expressed in. For our data we choose to keep only genes which are expressed in 10 or more cells. By using this filter, genes which have zero counts in all cells will effectively be removed.
+
+Sums all TRUE values and returns TRUE if more than 10 TRUE values per gene
+
+```{r}
+keep_genes <- Matrix::rowSums(nonzero) >= 10
+```
+
+```{r}
+filtered_counts <- counts[keep_genes, ]
+```
+
+```{r}
+filtered_data_object <- CreateSeuratObject(filtered_counts, meta.data = filtered_data_object@meta.data)
+```
+
+```{r}
+filtered_data_object@meta.data |> 
+  dplyr::count(orig.ident)
+```
+
+# Post Visualization
+
+The number of cell counts per sample
+
+```{r}
+filtered_data_object |>
+  ggplot(aes(x = orig.ident, fill = orig.ident)) +
+  geom_bar() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  ggtitle("Number of Cells Per Sample Raw/Pre-Filtered")
+```
+
+## Violin Plot
+
+Visualize QC metrics as a violin plot -- check for any inconsistencies or weird data densities
+
+```{r vln counts and mito}
+VlnPlot(filtered_data_object, features = c("nFeature_RNA", "nCount_RNA", "mitoPct"), ncol = 3)
+```
+
+# SCTransform Normalization
+=========================
+
+## Increase Memory
+
+Before we run this for loop, we know that the output can generate large R objects/variables in terms of memory. If we have a large dataset, then we might need to adjust the limit for allowable object sizes within R (Default is 500 * 1024 ^ 2 = 500 Mb) using the following code:
+
+```{r increase memory}
+options(future.globals.maxSize = 14000 * 1024^2) ## 14 GB (I think ...)
+```
+
+```{r view SCTransform}
+SCT_data_object <- filtered_data_object |>
+  SCTransform()
+```
+
+# SAVE POINT
+
+Save Seurat after initial creation
+
+```{r}
+saveRDS(SCT_data_object, file = paste0(result.dir, "ds_75_gex_and_ds_83_SCT_object.rds"))
+```
+
+Load object to avoid running the code chunks above over again.
+
+```{r}
+# SCT_data_object <- readRDS(paste0(result.dir, "ds_75_gex_and_ds_83_SCT_object.rds"))
+```
+
+```{r}
+rm(DS_75_GEX, DS_75_GEX_obj, DS_83, DS_83_obj, filtered_data_object)
+```
+
+
+# PC Selection (FindVar → Scale → PCA → UMAP→ )
+
+```{r}
+set.seed(123)
+SCT_data_object <- FindVariableFeatures(SCT_data_object,
+                       selection.method = "vsn",
+                       nfeatures = 2000,
+                       verbose = F) |>
+  ScaleData() |>
+  RunPCA()
+```
+
+```{r}
+pct <- SCT_data_object[["pca"]]@stdev / sum(SCT_data_object[["pca"]]@stdev) * 100
+# pct
+cumu <- cumsum(pct)
+# cumu
+co1 <- which(cumu > 90 & pct < 5)[1]
+co1
+```
+
+```{r}
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+co2
+```
+
+```{r}
+pcs <- min(co1, co2)
+pcs
+```
+
+```{r}
+plot_df <- data.frame(pct = pct,
+                      cumu = cumu,
+                      rank = 1:length(pct))
+
+plot_df
+
+ggplot(plot_df, aes(cumu, pct, label = rank, color = rank > pcs)) +
+  geom_text() +
+  # geom_vline(xintercept = 75, color = "grey") +
+  # geom_hline(yintercept = min(pct[pct > 5]), color = "grey") +
+  theme_bw()
+```
+
+# Clustering (FindNeighbors → FindClusters )
+
+```{r}
+# DefaultAssay(SCT_data_object) = "RNA" ?? Not sure this is true ... maybe I still use SCTransformed values to "Find Cluster" ... 
+SCT_data_object <- SCT_data_object |>
+  FindNeighbors(dims = 1:pcs, verbose = F) |>
+  FindClusters(resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |>
+  # FindClusters(., method = "igraph", verbose = F) |>
+  RunUMAP(dims = 1:40,
+          reduction = "pca",
+          n.components = 3L)
+```
+
+## Tally Clusters
+
+```{r}
+SCT_data_object@meta.data
+```
+
+```{r}
+SCT_data_object |>
+  as_tibble() |>
+  select_at(vars(contains("SCT_snn_res"))) |>
+  pivot_longer(cols = 1:5,
+               names_to = "Resolution",
+               values_to = "cluster") |>
+  mutate(cluster = as.numeric(cluster)) |>
+  group_by(Resolution) |>
+  summarise(mean = mean(cluster, rm.na = T),
+            max = max(cluster))
+```
+
+```{r}
+# Idents(SCT_data_object) <- "SCT_snn_res.0.3" # name is picked from column name of resolutions
+dittoDimPlot(SCT_data_object,
+             var = "SCT_snn_res.0.05",
+             size = 0.2,
+             legend.show = FALSE,
+             do.label = TRUE,
+             labels.size = 2,
+             labels.highlight = TRUE,
+             do.ellipse = FALSE,
+             do.letter = FALSE,
+             opacity = 0.5,
+             do.contour = FALSE,
+             main = "Verneris Down Syndrome",
+             sub = "created: Tzu L. Phang",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1")
+```
+
+```{r}
+cluster5.markers <- FindMarkers(SCT_data_object, ident.1 = 5, min.pct = 0.25)
+```
+
+# SAVE POINT postClustering
+
+Object before going into cell labeling
+
+```{r}
+# saveRDS(SCT_data_object, file = paste0(result.dir, "ds_75_gex_and_ds_83_object_postClustering.rds"))
+```
+
+```{r}
+# SCT_data_object <- readRDS(file = paste0(result.dir, "ds_75_gex_and_ds_83_object_postClustering.rds"))
+```
+
+# HCATonsilData
+
+Collect individual Tonsil single cell (labeled) dataset and combine them for "anchoring" purposes:
+
+## PDC
+
+```{r}
+HCATonsil.PDC <- readRDS("data/hca_data/20220215_PDC_seurat_obj.rds")
+```
+
+```{r}
+HCATonsil.PDC@meta.data |> 
+  dplyr::count(annotation_20220215)
+```
+
+## myeloid
+
+```{r}
+HCATonsil.myeloid <- readRDS("data/hca_data/20220215_myeloid_seurat_obj.rds")
+```
+
+```{r}
+HCATonsil.myeloid@meta.data |> 
+  dplyr::count(annotation_20220215) 
+```
+
+## ILC NK
+
+```{r}
+HCATonsil.ILC.NK <- readRDS("data/hca_data/20220215_ILC_NK_seurat_obj.rds")
+```
+
+```{r}
+HCATonsil.ILC.NK@meta.data |> 
+  dplyr::count(annotation_20220215) 
+```
+
+## PC
+
+```{r}
+HCATonsil.PC <- readRDS("data/hca_data/20220215_PC_seurat_obj.rds")
+```
+
+```{r }
+HCATonsil.PC |> 
+  dplyr::count(annotation_20220215)
+```
+
+## Combined
+
+```{r}
+HCATonsil.combined <- merge(x = HCATonsil.PDC, 
+                           y = c(HCATonsil.myeloid, HCATonsil.ILC.NK, HCATonsil.PC),
+                           add.cell.id = c("PDC", "myeloid", "ILC_NK", "PC"))
+```
+
+```{r view merged counts}
+HCATonsil.combined@meta.data |> 
+  dplyr::count(annotation_20220215)
+```
+
+## Recluster
+
+```{r}
+set.seed(123)
+HCATonsil.combined <- HCATonsil.combined  |>  
+  NormalizeData() |> 
+  FindVariableFeatures(
+                       # selection.method = "vsn",
+                       nfeatures = 2000,
+                       verbose = T) |> 
+  ScaleData() |> 
+  RunPCA() |> 
+  FindNeighbors(dims = 1:50, verbose = F) |> 
+  FindClusters(resolution = c(0.05, 0.1, 0.2, 0.3, 0.4)) |> 
+  RunUMAP(dims = 1:40,
+          reduction = "pca")
+```
+
+```{r}
+HCATonsil.combined@meta.data
+```
+
+```{r}
+dittoDimPlot(HCATonsil.combined,
+             # var = "RNA_snn_res.0.4",
+             var = "annotation_20220215",
+             size = 0.2,
+             legend.show = FALSE,
+             do.label = TRUE,
+             labels.size = 2,
+             labels.highlight = TRUE,
+             do.ellipse = FALSE,
+             do.letter = FALSE,
+             opacity = 0.5,
+             do.contour = FALSE,
+             main = "Verneris Down Syndrome",
+             ylab = "UMAP 2",
+             xlab = "UMAP 1")
+```
+
+## Save HCAtonsil.combined
+
+I apparently have been rebuilding HCATonsil.cobined with each additional sample. I will save it here for quick loading in the future.
+
+```{r}
+saveRDS(HCATonsil.combined, file = paste0(result.dir, "HCATonsil.combined.rds"))
+```
+
+```{r}
+# HCATonsil.combined <- readRDS(file = paste0(result.dir, "HCATonsil.combined.rds"))
+```
+
+```{r}
+rm(HCATonsil.ILC.NK, HCATonsil.myeloid, HCATonsil.PC, HCATonsil.PDC)
+```
+
+
+# FindAnchor
+
+```{r}
+intersect.feature <- intersect(rownames(SCT_data_object), rownames(HCATonsil.combined))
+```
+
+```{r}
+DefaultAssay(SCT_data_object) <- "RNA"
+
+# transfer cell type labels from reference to query
+transfer_anchors <- FindTransferAnchors(reference = HCATonsil.combined,
+                                        query = SCT_data_object,
+                                        features = intersect.feature,
+                                        # normalization.method = "",
+                                        reference.reduction = "pca",
+                                        recompute.residuals = T,
+                                        dims = 1:50)
+
+predictions <- TransferData(anchorset = transfer_anchors, 
+                            refdata = HCATonsil.combined$annotation_20220215,
+                            weight.reduction = SCT_data_object[['pca']], ## using query data
+                            dims = 1:50)
+
+SCT_data_object <- AddMetaData(object = SCT_data_object,
+                               metadata = predictions)
+```
+
+```{r}
+SCT_data_object@meta.data |> 
+  dplyr::count(predicted.id)
+```
+
+## SAVE: Post Anchor SCT Object
+
+```{r save anchored seurat}
+qsave(SCT_data_object, file = paste0(result.dir, "ds_75_gex_and_ds_83_SCT_object_Post_Anchored.qs"), nthreads = 10)
+```
+
+```{r load anchored seurat}
+# SCT_data_object <- qread(file = paste0(result.dir, "ds_75_gex_and_ds_83_SCT_object_Post_Anchored.qs"), nthreads = 10)
+```
+
+# Cell counts
+
+Now we can look at the cell counts of the new samples.
+
+```{r}
+cell_counts <- SCT_data_object@meta.data |>  
+  group_by(predicted.id) |> 
+  count(orig.ident) |> 
+  pivot_wider(names_from = orig.ident, values_from = n)
+```
+
+Save the results
+
+```{r}
+write_csv(cell_counts, file = paste0(result.dir, "cell_counts.csv"))
+```
+
+
+## merge with old counts
+
+```{r}
+old_counts <- read.csv(file = "Analysis_2023_10_03/results/2023_10_03_cell_ids.csv")
+```
+
+```{r}
+new_total_counts <- dplyr::full_join(old_counts, cell_counts, by = "predicted.id")
+```
+
+```{r}
+write_csv(new_total_counts, file = paste0(result.dir, "2024_07_15_cell_ids.csv"))
+```
+
+
+
+
