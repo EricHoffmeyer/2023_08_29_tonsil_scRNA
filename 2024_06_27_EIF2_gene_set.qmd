@@ -1,0 +1,91 @@
+---
+title: "2024_06_27_EIF2_gene_set"
+format: html
+editor: source
+---
+
+Elena asked about some EIF signaling data in some subsets of the single cell data, so I will investigate that gene set in this notebook.
+
+# Directores
+
+```{r dir folders}
+folder.name <- "Analysis_2025_06_24"
+
+if(!exists(folder.name)){
+  dir.create(folder.name)
+}
+
+```
+
+# Libraries
+
+```{r libraries}
+suppressPackageStartupMessages({
+library(Seurat)
+library(tidyverse)
+library(org.Hs.eg.db)
+library(clusterProfiler)
+library(ReactomePA)
+library(gprofiler2)
+library(DESeq2)
+library(msigdbr)
+library(qs)
+})
+```
+
+# Import Data
+
+The gene sets I sent are in Analysis_2023_08_29. Some additional samples have been added since then, in 2023_10_03 and two others I have not yet added to the object. So I may need to revisit this notebook after doing that. For now we will continue with the original data.
+
+```{r}
+monocyte.data <- read.csv(file = "Analysis_2023_08_29/results/mono_Sig_Genes.csv") |> 
+  dplyr::filter(p_val_adj < 0.05)
+ilc1.data <- read.csv(file = "Analysis_2023_08_29/results/ilc1_Sig_Genes.csv") |> 
+  dplyr::filter(p_val_adj < 0.05)
+ilc3.data <- read.csv(file = "Analysis_2023_08_29/results/ilc3_Sig_Genes.csv") |> 
+  dplyr::filter(p_val_adj < 0.05)
+cd16pos.nk.data <- read.csv(file = "Analysis_2023_08_29/results/nk_cd16_pos_Sig_Genes.csv") |> 
+  dplyr::filter(p_val_adj < 0.05)
+cd16neg.nk.data <- read.csv(file = "Analysis_2023_08_29/results/nk_cd16_neg_Sig_Genes.csv") |> 
+  dplyr::filter(p_val_adj < 0.05)
+```
+
+# EIF2 signaling pathway
+
+Now we need to find the gene set for EIF2 signaling
+
+```{r}
+mono.go <- groupGO(gene = monocyte.data$symbols,
+                   keyType = "SYMBOL",
+                   OrgDb = org.Hs.eg.db,
+                   ont = "BP",
+                   level = 2,
+                   readable = T)
+head(mono.go)
+```
+
+
+```{r}
+mono.gse <- gseGO(geneList = monocyte.data$symbols,
+                  keyType = "SYMBOL",
+                  OrgDb = org.Hs.eg.db,
+                  ont = "BP",
+                  verbose = FALSE)
+
+head(mono.gse)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
