@@ -1,0 +1,29 @@
+predicted.id,DS_75_GEX,DS_83
+CD16+CD56- NK,121,51
+CD16-CD56+ NK,190,19
+CD16-CD56- NK,705,558
+Cycling,1,2
+DC1 mature,287,279
+DC2,668,581
+DC4,3,NA
+DC5,204,65
+IL7R DC,8,31
+IL7R MMP12 macrophages,162,75
+ILC1,48,647
+ITGAX ZEB2 macrophages,115,5
+IgG+ PC precursor,1,NA
+Light Zone GCBC,31,8
+M1 Macrophages,260,472
+MBC derived IgA+ PC,13,5
+MBC derived early PC precursor,3,4
+Mast cells,507,14
+Mature IgA+ PC,6,NA
+Monocytes,1471,148
+NKp44+ ILC3,14,883
+Neutrophil Granulocytes,65,107
+PB,138,60
+PC committed Light Zone GCBC,2,1
+PDC,10,668
+SELENOP FUCA1 PTGDS macrophages,88,9
+aDC1,472,78
+class switch MBC,189,103
